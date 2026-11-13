@@ -149,31 +149,53 @@ def _radial_layout(n, edges):
 # --------------------------------------------------------------------------- forces
 
 
-@nb.njit(cache=True)
-def _build_pyramid(pos, cx, cy, levels, offsets):
-    """Mass and coordinate sums per cell for each quadtree level (flat storage)."""
+@nb.njit(cache=True, parallel=True)
+def _build_pyramid(spos, cell_start, levels, offsets):
+    """Mass and coordinate sums per cell for each quadtree level (flat storage).
+
+    ``spos`` holds positions grouped by finest cell (see ``_sort_by_cell``): the finest
+    level sums each cell's contiguous slice, coarser levels sum their 4 children.
+    """
     total = offsets[-1]
     mass = np.zeros(total)
     sx = np.zeros(total)
     sy = np.zeros(total)
-    for i in range(cx.shape[0]):
-        for lvl in range(levels + 1):
-            shift = levels - lvl
-            g = 1 << lvl
-            cell = offsets[lvl] + (cx[i] >> shift) * g + (cy[i] >> shift)
-            mass[cell] += 1.0
-            sx[cell] += pos[i, 0]
-            sy[cell] += pos[i, 1]
+    g = 1 << levels
+    base = offsets[levels]
+    for c in nb.prange(g * g):
+        x, y = 0.0, 0.0
+        for p in range(cell_start[c], cell_start[c + 1]):
+            x += spos[p, 0]
+            y += spos[p, 1]
+        mass[base + c] = cell_start[c + 1] - cell_start[c]
+        sx[base + c] = x
+        sy[base + c] = y
+    for lvl in range(levels - 1, -1, -1):
+        gl = 1 << lvl
+        child_base, gc = offsets[lvl + 1], gl * 2
+        for c in nb.prange(gl * gl):
+            a, b = c // gl, c % gl
+            m, x, y = 0.0, 0.0, 0.0
+            for da in range(2):
+                for db in range(2):
+                    child = child_base + (2 * a + da) * gc + (2 * b + db)
+                    m += mass[child]
+                    x += sx[child]
+                    y += sy[child]
+            mass[offsets[lvl] + c] = m
+            sx[offsets[lvl] + c] = x
+            sy[offsets[lvl] + c] = y
     return mass, sx, sy
 
 
 @nb.njit(cache=True, parallel=True)
-def _repulsion(pos, cx, cy, levels, offsets, mass, sx, sy, order, cell_start, k2):
-    n = pos.shape[0]
+def _repulsion(spos, cx, cy, levels, offsets, mass, sx, sy, cell_start, k2):
+    """Repulsive forces, all arrays in cell order (``_sort_by_cell``) for memory locality."""
+    n = spos.shape[0]
     g_fine = 1 << levels
     force = np.zeros((n, 2))
     for i in nb.prange(n):
-        xi, yi = pos[i, 0], pos[i, 1]
+        xi, yi = spos[i, 0], spos[i, 1]
         fx, fy = 0.0, 0.0
         # Far field: cells that are children of the parent's neighbours but not neighbours themselves.
         for lvl in range(2, levels + 1):
@@ -199,12 +221,11 @@ def _repulsion(pos, cx, cy, levels, offsets, mass, sx, sy, order, cell_start, k2
         for a in range(max(0, ci - 1), min(g_fine, ci + 2)):
             for b in range(max(0, cj - 1), min(g_fine, cj + 2)):
                 c = a * g_fine + b
-                for p in range(cell_start[c], cell_start[c + 1]):
-                    j = order[p]
+                for j in range(cell_start[c], cell_start[c + 1]):
                     if j == i:
                         continue
-                    dx = xi - pos[j, 0]
-                    dy = yi - pos[j, 1]
+                    dx = xi - spos[j, 0]
+                    dy = yi - spos[j, 1]
                     d2 = dx * dx + dy * dy + 1e-9
                     fx += k2 * dx / d2
                     fy += k2 * dy / d2
@@ -237,7 +258,11 @@ def _step(pos, force, indptr, nbrs, k, gravity, temp, anchor):
 
 @nb.njit(cache=True)
 def _sort_by_cell(pos, lo, span, g):
-    """Finest-grid cell of each particle, and particles grouped by cell (counting sort)."""
+    """Group particles by finest-grid cell (counting sort).
+
+    Returns positions and cell coordinates in cell order, the permutation ``order``
+    (sorted index -> original index) and the CSR-style ``cell_start`` offsets.
+    """
     n = pos.shape[0]
     cx = np.empty(n, dtype=np.int64)
     cy = np.empty(n, dtype=np.int64)
@@ -251,11 +276,17 @@ def _sort_by_cell(pos, lo, span, g):
         cell_start[c + 1] += cell_start[c]
     fill = cell_start[:-1].copy()
     order = np.empty(n, dtype=np.int64)
+    spos = np.empty_like(pos)
+    scx = np.empty(n, dtype=np.int64)
+    scy = np.empty(n, dtype=np.int64)
     for i in range(n):
         c = cx[i] * g + cy[i]
-        order[fill[c]] = i
+        p = fill[c]
+        order[p] = i
+        spos[p, 0], spos[p, 1] = pos[i, 0], pos[i, 1]
+        scx[p], scy[p] = cx[i], cy[i]
         fill[c] += 1
-    return cx, cy, order, cell_start
+    return spos, scx, scy, order, cell_start
 
 
 def _force_iterations(pos, indptr, nbrs, k, n_iter, temp0, gravity, anchor):
@@ -268,9 +299,10 @@ def _force_iterations(pos, indptr, nbrs, k, n_iter, temp0, gravity, anchor):
     for it in range(n_iter):
         lo = pos.min(axis=0)
         span = (pos.max(axis=0) - lo).max() + 1e-9
-        cx, cy, order, cell_start = _sort_by_cell(pos, lo, span, g)
-        mass, sx, sy = _build_pyramid(pos, cx, cy, levels, offsets)
-        force = _repulsion(pos, cx, cy, levels, offsets, mass, sx, sy, order, cell_start, k * k)
+        spos, scx, scy, order, cell_start = _sort_by_cell(pos, lo, span, g)
+        mass, sx, sy = _build_pyramid(spos, cell_start, levels, offsets)
+        force = np.empty_like(pos)
+        force[order] = _repulsion(spos, scx, scy, levels, offsets, mass, sx, sy, cell_start, k * k)
         temp = temp0 * (1 - it / n_iter) + 0.01 * k
         pos = _step(pos, force, indptr, nbrs, k, gravity, temp, anchor)
     return pos
