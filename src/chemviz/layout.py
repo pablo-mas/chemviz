@@ -235,21 +235,41 @@ def _step(pos, force, indptr, nbrs, k, gravity, temp, anchor):
     return new
 
 
+@nb.njit(cache=True)
+def _sort_by_cell(pos, lo, span, g):
+    """Finest-grid cell of each particle, and particles grouped by cell (counting sort)."""
+    n = pos.shape[0]
+    cx = np.empty(n, dtype=np.int64)
+    cy = np.empty(n, dtype=np.int64)
+    cell_start = np.zeros(g * g + 1, dtype=np.int64)
+    for i in range(n):
+        a = min(int((pos[i, 0] - lo[0]) / span * g), g - 1)
+        b = min(int((pos[i, 1] - lo[1]) / span * g), g - 1)
+        cx[i], cy[i] = a, b
+        cell_start[a * g + b + 1] += 1
+    for c in range(g * g):
+        cell_start[c + 1] += cell_start[c]
+    fill = cell_start[:-1].copy()
+    order = np.empty(n, dtype=np.int64)
+    for i in range(n):
+        c = cx[i] * g + cy[i]
+        order[fill[c]] = i
+        fill[c] += 1
+    return cx, cy, order, cell_start
+
+
 def _force_iterations(pos, indptr, nbrs, k, n_iter, temp0, gravity, anchor):
     n = pos.shape[0]
-    levels = int(np.clip(np.ceil(np.log2(np.sqrt(max(n, 4) / 4))), 2, 11))
+    # ~1 particle per finest cell over the bounding box: tree layouts leave much of it
+    # empty, so occupied cells are denser and the exact near-field term dominates otherwise.
+    levels = int(np.clip(np.ceil(np.log2(np.sqrt(max(n, 4)))), 2, 12))
     g = 1 << levels
     offsets = np.array([sum(4**j for j in range(lvl)) for lvl in range(levels + 2)], dtype=np.int64)
     for it in range(n_iter):
         lo = pos.min(axis=0)
         span = (pos.max(axis=0) - lo).max() + 1e-9
-        cell = np.minimum(((pos - lo) / span * g).astype(np.int64), g - 1)
-        cx, cy = cell[:, 0].copy(), cell[:, 1].copy()
+        cx, cy, order, cell_start = _sort_by_cell(pos, lo, span, g)
         mass, sx, sy = _build_pyramid(pos, cx, cy, levels, offsets)
-        fine = cx * g + cy
-        order = np.argsort(fine, kind="stable")
-        cell_start = np.zeros(g * g + 1, dtype=np.int64)
-        np.cumsum(np.bincount(fine, minlength=g * g), out=cell_start[1:])
         force = _repulsion(pos, cx, cy, levels, offsets, mass, sx, sy, order, cell_start, k * k)
         temp = temp0 * (1 - it / n_iter) + 0.01 * k
         pos = _step(pos, force, indptr, nbrs, k, gravity, temp, anchor)
