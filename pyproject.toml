@@ -1,0 +1,25 @@
+[project]
+name = "chemviz"
+version = "0.1.0"
+description = "Fast, easy-to-install chemical space visualization (TMAP and more)"
+license = "MIT"
+license-files = ["LICENSE"]
+readme = "README.md"
+authors = [
+    { name = "Pablo Mas", email = "pablovn.mas@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "numba>=0.68.1",
+    "numpy>=2.5.4",
+    "rdkit>=2026.9.2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
