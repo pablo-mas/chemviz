@@ -1,6 +1,6 @@
 """Benchmark chemviz against the original tmap on the same MinHash input.
 
-Usage: uv run python benchmarks/compare_tmap.py [fxa|zinc] [n_molecules]
+Usage: uv run python benchmarks/compare_tmap.py [fxa|zinc|chembl] [n_molecules|all] [chemviz,tmap]
 Requires the original tmap in .venv-tmap (Python 3.10, `uv pip install tmap-viz "numpy<2" scipy`).
 Each tool runs in its own process so timings and peak memory are isolated.
 """
@@ -74,7 +74,8 @@ def global_structure(pos, edges, n_src=20, n_tgt=20000, seed=1):
 
 def main():
     name = sys.argv[1] if len(sys.argv) > 1 else "fxa"
-    limit = int(sys.argv[2]) if len(sys.argv) > 2 else None
+    limit = int(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2] != "all" else None
+    tools = sys.argv[3].split(",") if len(sys.argv) > 3 else list(RUNNERS)
     OUT.mkdir(exist_ok=True)
     smiles, color, categorical = load(name, limit)
     n = len(smiles)
@@ -86,7 +87,8 @@ def main():
     true_knn = exact_knn(hashes, queries, 10)
 
     print(f"{name} n={n}")
-    for tool, cmd in RUNNERS.items():
+    for tool in tools:
+        cmd = RUNNERS[tool]
         out_path = OUT / f"{name}_{n}_{tool}.npz"
         res = subprocess.run([*cmd, str(hashes_path), str(out_path)], capture_output=True, text=True, check=True)
         stats = json.loads(res.stdout.strip().splitlines()[-1])
