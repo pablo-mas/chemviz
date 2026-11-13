@@ -18,9 +18,9 @@ from matplotlib.collections import LineCollection
 from scipy.spatial import cKDTree
 
 sys.path.insert(0, str(Path(__file__).parent))
-from layouts import force_layout, multilevel_layout, radial_layout  # noqa: E402
+from layouts import force_layout, radial_layout  # noqa: E402
 
-from chemviz import lsh_knn, minhash_ecfp, minimum_spanning_forest  # noqa: E402
+from chemviz import lsh_knn, minhash_ecfp, minimum_spanning_forest, tree_layout  # noqa: E402
 
 ROOT = Path(__file__).parent.parent
 OUT = Path(__file__).parent / "out"
@@ -84,7 +84,7 @@ def main():
         "radial": lambda: radial_layout(n, edges),
         "force": lambda: force_layout(n, edges),
         "force600": lambda: force_layout(n, edges, n_iter=600),
-        "multilevel": lambda: multilevel_layout(n, edges),
+        "multilevel": lambda: tree_layout(n, edges),
     }
     for lname, fn in layouts.items():
         fn() if n < 2000 else None  # warm numba JIT on small inputs only
