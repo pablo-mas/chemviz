@@ -4,6 +4,7 @@ from collections.abc import Sequence
 
 import numba as nb
 import numpy as np
+from joblib import Parallel, delayed
 from rdkit import Chem
 from rdkit.Chem import rdFingerprintGenerator, rdMHFPFingerprint
 
@@ -26,44 +27,64 @@ def _minhash_csr(indptr, features, a, b):
     return out
 
 
+def _ecfp_features(smiles: Sequence[str], radius: int):
+    """Morgan feature ids of a chunk of SMILES as CSR arrays, plus local indices of invalid SMILES."""
+    generator = rdFingerprintGenerator.GetMorganGenerator(radius=radius)
+    lengths, feats, invalid = [], [], []
+    for i, s in enumerate(smiles):
+        mol = Chem.MolFromSmiles(s)
+        if mol is None:
+            invalid.append(i)
+            lengths.append(0)
+            continue
+        bits = generator.GetSparseFingerprint(mol).GetOnBits()
+        feats.extend(bits)
+        lengths.append(len(bits))
+    indptr = np.zeros(len(smiles) + 1, dtype=np.int64)
+    np.cumsum(lengths, out=indptr[1:])
+    # RDKit reports signed 32-bit ids; reinterpret them as unsigned.
+    features = (np.array(feats, dtype=np.int64) & 0xFFFFFFFF).astype(np.uint64)
+    return indptr, features, invalid
+
+
 def minhash_ecfp(
     smiles: Sequence[str],
     n_permutations: int = 128,
     radius: int = 2,
     seed: int = 42,
-    chunk_size: int = 50_000,
+    chunk_size: int = 10_000,
+    n_jobs: int | None = None,
 ) -> np.ndarray:
     """MinHash of the unfolded ECFP (Morgan) substructure identifiers of each molecule.
 
     Like MHFP, the MinHash distance estimates the Jaccard distance between sets of
     circular substructures, but feature extraction is ~50x faster than MHFP shingling.
-    Molecules are processed in chunks so they are never all held in memory.
+    SMILES are parsed in chunks by ``n_jobs`` worker processes (default: all CPUs;
+    1 disables multiprocessing), so molecules are never all held in memory.
 
     Returns a ``(n_molecules, n_permutations)`` uint32 array.
     Raises ``ValueError`` listing the indices of unparsable SMILES.
     """
+    smiles = list(smiles)
     rng = np.random.default_rng(seed)
     # a, b < 2**32 keep a * x + b within uint64 for 32-bit feature ids.
     a = rng.integers(1, 1 << 32, n_permutations, dtype=np.uint64)
     b = rng.integers(0, 1 << 32, n_permutations, dtype=np.uint64)
-    generator = rdFingerprintGenerator.GetMorganGenerator(radius=radius)
+    starts = range(0, len(smiles), chunk_size)
+    chunks = [smiles[i:i + chunk_size] for i in starts]
+    if n_jobs == 1 or len(chunks) <= 1:
+        results = (_ecfp_features(c, radius) for c in chunks)
+    else:
+        # RDKit holds the GIL, so parse in processes. joblib's loky workers neither re-run the
+        # caller's __main__ (unlike spawn) nor fork a process already running numba threads.
+        results = Parallel(n_jobs=-1 if n_jobs is None else n_jobs, return_as="generator")(
+            delayed(_ecfp_features)(c, radius) for c in chunks
+        )
     out = np.empty((len(smiles), n_permutations), dtype=np.uint32)
     invalid = []
-    for start in range(0, len(smiles), chunk_size):
-        feats = []
-        for i, s in enumerate(smiles[start:start + chunk_size], start):
-            mol = Chem.MolFromSmiles(s)
-            if mol is None:
-                invalid.append(i)
-                feats.append(())
-            else:
-                feats.append(generator.GetSparseFingerprint(mol).GetOnBits())
-        indptr = np.zeros(len(feats) + 1, dtype=np.int64)
-        np.cumsum([len(f) for f in feats], out=indptr[1:])
-        # RDKit reports signed 32-bit ids; reinterpret them as unsigned.
-        features = np.fromiter((x for f in feats for x in f), dtype=np.int64, count=indptr[-1])
-        features = (features & 0xFFFFFFFF).astype(np.uint64)
-        out[start:start + len(feats)] = _minhash_csr(indptr, features, a, b)
+    for start, (indptr, features, bad) in zip(starts, results):
+        out[start:start + len(indptr) - 1] = _minhash_csr(indptr, features, a, b)
+        invalid.extend(start + i for i in bad)
     if invalid:
         raise ValueError(f"Invalid SMILES at indices {invalid[:20]}{'...' if len(invalid) > 20 else ''}")
     return out

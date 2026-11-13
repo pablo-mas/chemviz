@@ -55,7 +55,10 @@ def test_minhash_ecfp_estimates_jaccard_of_morgan_features():
 def test_minhash_ecfp_is_chunk_independent_and_validates():
     from chemviz import minhash_ecfp
 
-    np.testing.assert_array_equal(minhash_ecfp(SMILES, chunk_size=3), minhash_ecfp(SMILES))
-    assert minhash_ecfp(SMILES).dtype == np.uint32
-    with pytest.raises(ValueError, match=r"\[2\]"):
-        minhash_ecfp(["CCO", "CCN", "not_a_smiles"], chunk_size=1)
+    reference = minhash_ecfp(SMILES, n_jobs=1)
+    np.testing.assert_array_equal(minhash_ecfp(SMILES, chunk_size=3, n_jobs=1), reference)
+    np.testing.assert_array_equal(minhash_ecfp(SMILES, chunk_size=1, n_jobs=2), reference)
+    assert reference.dtype == np.uint32
+    for n_jobs in (1, 2):
+        with pytest.raises(ValueError, match=r"\[2\]"):
+            minhash_ecfp(["CCO", "CCN", "not_a_smiles"], chunk_size=1, n_jobs=n_jobs)
