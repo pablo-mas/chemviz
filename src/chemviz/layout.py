@@ -198,7 +198,7 @@ def _repulsion(pos, cx, cy, levels, offsets, mass, sx, sy, order, cell_start, k2
 
 
 @nb.njit(cache=True, parallel=True)
-def _step(pos, force, indptr, nbrs, k, gravity, temp):
+def _step(pos, force, indptr, nbrs, k, gravity, temp, anchor):
     n = pos.shape[0]
     new = np.empty_like(pos)
     for v in nb.prange(n):
@@ -210,8 +210,8 @@ def _step(pos, force, indptr, nbrs, k, gravity, temp):
             d = np.sqrt(dx * dx + dy * dy) + 1e-9
             fx += d * dx / k  # FR attraction d^2/k along the unit vector
             fy += d * dy / k
-        fx -= gravity * pos[v, 0]
-        fy -= gravity * pos[v, 1]
+        fx -= gravity * (pos[v, 0] - anchor[v, 0])
+        fy -= gravity * (pos[v, 1] - anchor[v, 1])
         f = np.sqrt(fx * fx + fy * fy) + 1e-12
         step = min(f, temp)
         new[v, 0] = pos[v, 0] + fx / f * step
@@ -219,7 +219,7 @@ def _step(pos, force, indptr, nbrs, k, gravity, temp):
     return new
 
 
-def _force_iterations(pos, indptr, nbrs, k, n_iter, temp0, gravity):
+def _force_iterations(pos, indptr, nbrs, k, n_iter, temp0, gravity, anchor):
     n = pos.shape[0]
     levels = int(np.clip(np.ceil(np.log2(np.sqrt(max(n, 4) / 4))), 2, 11))
     g = 1 << levels
@@ -236,7 +236,7 @@ def _force_iterations(pos, indptr, nbrs, k, n_iter, temp0, gravity):
         np.cumsum(np.bincount(fine, minlength=g * g), out=cell_start[1:])
         force = _repulsion(pos, cx, cy, levels, offsets, mass, sx, sy, order, cell_start, k * k)
         temp = temp0 * (1 - it / n_iter) + 0.01 * k
-        pos = _step(pos, force, indptr, nbrs, k, gravity, temp)
+        pos = _step(pos, force, indptr, nbrs, k, gravity, temp, anchor)
     return pos
 
 
@@ -285,8 +285,8 @@ def tree_layout(
     edges: np.ndarray,
     iters_coarse: int = 300,
     iters_fine: int = 50,
-    min_nodes: int = 50,
-    gravity: float = 0.01,
+    min_nodes: int = 500,
+    gravity: float = 2.0,
     seed: int = 0,
 ) -> np.ndarray:
     """2D layout of a spanning forest over ``n`` nodes (e.g. from ``minimum_spanning_forest``).
@@ -294,6 +294,10 @@ def tree_layout(
     ``iters_coarse`` force iterations are run on the coarsest level (half as many on
     intermediate levels) and ``iters_fine`` on the full tree. Coarsening stops once a
     level has at most ``min_nodes`` nodes. Results are deterministic for a given ``seed``.
+
+    When a level is expanded, each node is pulled towards its group's position with
+    strength ``gravity``. This local gravity keeps branches compact without collapsing
+    the global tree structure, unlike a pull towards the centre.
 
     Returns an ``(n, 2)`` float32 array of coordinates (median edge length ~1).
     """
@@ -318,12 +322,14 @@ def tree_layout(
     if len(cur_edges):
         pos *= k / (np.median(np.linalg.norm(pos[cur_edges[:, 0]] - pos[cur_edges[:, 1]], axis=1)) + 1e-12)
     indptr, nbrs = _tree_csr(cur_n, cur_edges)
-    pos = _force_iterations(pos, indptr, nbrs, k, iters_coarse, np.abs(pos).max() / 10 + k, gravity)
+    # Weak central gravity on the coarsest level only, to keep components together.
+    pos = _force_iterations(pos, indptr, nbrs, k, iters_coarse, np.abs(pos).max() / 10 + k, 0.01, np.zeros_like(pos))
 
     for group, lvl_edges, lvl_n in reversed(hierarchy):
         k = np.sqrt(n / lvl_n)
-        pos = pos[group] + rng.normal(scale=0.1 * k, size=(lvl_n, 2))  # place members at their group
+        anchor = pos[group]
+        pos = anchor + rng.normal(scale=0.1 * k, size=(lvl_n, 2))  # place members at their group
         indptr, nbrs = _tree_csr(lvl_n, lvl_edges)
         iters = iters_fine if lvl_n == n else iters_coarse // 2
-        pos = _force_iterations(pos, indptr, nbrs, k, iters, 2 * k, gravity)
+        pos = _force_iterations(pos, indptr, nbrs, k, iters, 2 * k, gravity, anchor)
     return pos.astype(np.float32)
