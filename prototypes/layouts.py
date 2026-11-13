@@ -218,17 +218,11 @@ def _step(pos, force, indptr, nbrs, k, gravity, temp):
     return new
 
 
-def force_layout(n, edges, n_iter=200, init=None, gravity=0.01):
-    indptr, nbrs = tree_csr(n, edges)
-    pos = radial_layout(n, edges) if init is None else init.copy()
-    pos -= pos.mean(axis=0)
-    # Scale so the median edge length is 1 (= k).
-    pos /= np.median(np.linalg.norm(pos[edges[:, 0]] - pos[edges[:, 1]], axis=1)) + 1e-12
-    k = 1.0
+def _force_iterations(pos, indptr, nbrs, k, n_iter, temp0, gravity):
+    n = pos.shape[0]
     levels = int(np.clip(np.ceil(np.log2(np.sqrt(max(n, 4) / 4))), 2, 11))
     g = 1 << levels
     offsets = np.array([sum(4**j for j in range(lvl)) for lvl in range(levels + 2)], dtype=np.int64)
-    temp0 = np.abs(pos).max() / 10
     for it in range(n_iter):
         lo = pos.min(axis=0)
         span = (pos.max(axis=0) - lo).max() + 1e-9
@@ -240,6 +234,89 @@ def force_layout(n, edges, n_iter=200, init=None, gravity=0.01):
         cell_start = np.zeros(g * g + 1, dtype=np.int64)
         np.cumsum(np.bincount(fine, minlength=g * g), out=cell_start[1:])
         force = _repulsion(pos, cx, cy, levels, offsets, mass, sx, sy, order, cell_start, k * k)
-        temp = temp0 * (1 - it / n_iter) + 0.01
+        temp = temp0 * (1 - it / n_iter) + 0.01 * k
         pos = _step(pos, force, indptr, nbrs, k, gravity, temp)
+    return pos
+
+
+def force_layout(n, edges, n_iter=200, init=None, gravity=0.01):
+    indptr, nbrs = tree_csr(n, edges)
+    pos = radial_layout(n, edges) if init is None else init.copy()
+    pos -= pos.mean(axis=0)
+    # Scale so the median edge length is 1 (= k).
+    pos /= np.median(np.linalg.norm(pos[edges[:, 0]] - pos[edges[:, 1]], axis=1)) + 1e-12
+    return _force_iterations(pos, indptr, nbrs, 1.0, n_iter, np.abs(pos).max() / 10, gravity)
+
+
+# --------------------------------------------------------------------------- multilevel
+
+
+@nb.njit(cache=True)
+def _coarsen(indptr, nbrs, mass, order):
+    """Group each node with its lightest free neighbour, or join the lightest adjacent group.
+
+    Every non-isolated node ends up in a group of size >= 2 (so each level at least halves
+    the node count) and groups are connected, so contracting a tree gives a tree.
+    """
+    n = mass.shape[0]
+    group = np.full(n, -1, dtype=np.int64)
+    gmass = np.zeros(n)
+    n_groups = 0
+    for v in order:
+        if group[v] != -1:
+            continue
+        best_free, best_free_m = -1, np.inf
+        best_grp, best_grp_m = -1, np.inf
+        for p in range(indptr[v], indptr[v + 1]):
+            u = nbrs[p]
+            if group[u] == -1:
+                if mass[u] < best_free_m:
+                    best_free, best_free_m = u, mass[u]
+            elif gmass[group[u]] < best_grp_m:
+                best_grp, best_grp_m = group[u], gmass[group[u]]
+        if best_free != -1:
+            group[v] = group[best_free] = n_groups
+            gmass[n_groups] = mass[v] + mass[best_free]
+            n_groups += 1
+        elif best_grp != -1:
+            group[v] = best_grp
+            gmass[best_grp] += mass[v]
+        else:
+            group[v] = n_groups
+            gmass[n_groups] = mass[v]
+            n_groups += 1
+    return group, gmass[:n_groups].copy(), n_groups
+
+
+def multilevel_layout(n, edges, iters_coarse=300, iters_fine=50, min_nodes=50, gravity=0.01, seed=0):
+    """FM3-style multilevel force layout: coarsen the tree, lay out the coarsest level,
+    then repeatedly expand groups and refine with a few force iterations per level."""
+    rng = np.random.default_rng(seed)
+    hierarchy = []  # (group assignment, edges, n) per level, finest first
+    cur_edges, cur_n, mass = edges, n, np.ones(n)
+    while cur_n > min_nodes:
+        indptr, nbrs = tree_csr(cur_n, cur_edges)
+        group, gmass, n_groups = _coarsen(indptr, nbrs, mass, rng.permutation(cur_n))
+        if n_groups > 0.8 * cur_n:
+            break
+        hierarchy.append((group, cur_edges, cur_n))
+        ge = group[cur_edges]
+        cur_edges = ge[ge[:, 0] != ge[:, 1]]
+        cur_n, mass = n_groups, gmass
+
+    # Coarsest level: radial initialisation then a long force run.
+    k = np.sqrt(n / cur_n)  # coarse nodes stand for n / cur_n molecules: keep the total area comparable
+    pos = radial_layout(cur_n, cur_edges) if len(cur_edges) else rng.normal(size=(cur_n, 2))
+    pos -= pos.mean(axis=0)
+    if len(cur_edges):
+        pos *= k / (np.median(np.linalg.norm(pos[cur_edges[:, 0]] - pos[cur_edges[:, 1]], axis=1)) + 1e-12)
+    indptr, nbrs = tree_csr(cur_n, cur_edges)
+    pos = _force_iterations(pos, indptr, nbrs, k, iters_coarse, np.abs(pos).max() / 10, gravity)
+
+    for group, lvl_edges, lvl_n in reversed(hierarchy):
+        k = np.sqrt(n / lvl_n)
+        pos = pos[group] + rng.normal(scale=0.1 * k, size=(lvl_n, 2))  # place members at their group
+        indptr, nbrs = tree_csr(lvl_n, lvl_edges)
+        iters = iters_fine if lvl_n == n else iters_coarse // 2
+        pos = _force_iterations(pos, indptr, nbrs, k, iters, 2 * k, gravity)
     return pos
