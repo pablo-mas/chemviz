@@ -66,7 +66,9 @@ def plot(pos, edges, color, categorical, title, path):
     lw = 0.4 if len(pos) < 20_000 else 0.05
     ax.add_collection(LineCollection(segs, colors="0.6", linewidths=lw, zorder=1))
     s = 6 if len(pos) < 20_000 else 0.1
-    ax.scatter(pos[:, 0], pos[:, 1], c=color, s=s, cmap="tab20" if categorical else "viridis", zorder=2, linewidths=0)
+    vmin, vmax = (None, None) if categorical else np.percentile(color, [1, 99])  # ignore outliers
+    ax.scatter(pos[:, 0], pos[:, 1], c=color, s=s, cmap="tab20" if categorical else "viridis",
+               vmin=vmin, vmax=vmax, zorder=2, linewidths=0)
     ax.set_title(title)
     ax.set_aspect("equal")
     ax.axis("off")
