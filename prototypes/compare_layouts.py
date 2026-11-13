@@ -32,6 +32,13 @@ def load(name, limit=None):
         smiles = [r["SMILES"] for r in rows]
         labels = np.unique([r["SERIES_ID"] for r in rows], return_inverse=True)[1]
         return smiles[:limit], labels[:limit], True
+    if name == "chembl":
+        # Prepared by benchmarks/prepare_chembl.py; subsets are a seeded random sample.
+        smiles = (ROOT / "data/chembl/chembl_37_valid.smi").read_text().split()
+        if limit:
+            keep = np.sort(np.random.default_rng(0).choice(len(smiles), limit, replace=False))
+            smiles = [smiles[i] for i in keep]
+        return smiles, np.array([len(s) for s in smiles], dtype=float), False  # colour by SMILES length
     rows = list(csv.DictReader(open(ROOT / "data/zinc250k/zinc250k.csv")))
     smiles = [r["smiles"].strip() for r in rows]
     values = np.array([float(r["logP"]) for r in rows])
