@@ -65,6 +65,14 @@ def minhash_ecfp(
     Returns a ``(n_molecules, n_permutations)`` uint32 array.
     Raises ``ValueError`` listing the indices of unparsable SMILES.
     """
+    out, invalid = _minhash_ecfp(smiles, n_permutations, radius, seed, chunk_size, n_jobs)
+    if invalid:
+        raise ValueError(f"Invalid SMILES at indices {invalid[:20]}{'...' if len(invalid) > 20 else ''}")
+    return out
+
+
+def _minhash_ecfp(smiles, n_permutations, radius, seed, chunk_size, n_jobs):
+    """``minhash_ecfp`` returning ``(hashes, invalid_indices)`` instead of raising."""
     smiles = list(smiles)
     rng = np.random.default_rng(seed)
     # a, b < 2**32 keep a * x + b within uint64 for 32-bit feature ids.
@@ -85,9 +93,7 @@ def minhash_ecfp(
     for start, (indptr, features, bad) in zip(starts, results):
         out[start:start + len(indptr) - 1] = _minhash_csr(indptr, features, a, b)
         invalid.extend(start + i for i in bad)
-    if invalid:
-        raise ValueError(f"Invalid SMILES at indices {invalid[:20]}{'...' if len(invalid) > 20 else ''}")
-    return out
+    return out, invalid
 
 
 def mhfp(
