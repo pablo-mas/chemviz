@@ -12,7 +12,10 @@ from pathlib import Path
 
 import numba as nb
 import numpy as np
+from scipy.sparse import coo_matrix
+from scipy.sparse.csgraph import shortest_path
 from scipy.spatial import cKDTree
+from scipy.stats import spearmanr
 
 ROOT = Path(__file__).parent.parent
 OUT = Path(__file__).parent / "out"
@@ -52,6 +55,23 @@ def knn_preservation(pos, queries, true_knn):
     return float(np.mean([len(set(nn2d[i, 1:]) & set(true_knn[i])) / k for i in range(len(queries))]))
 
 
+def global_structure(pos, edges, n_src=20, n_tgt=20000, seed=1):
+    """Spearman correlation between tree hop distance and 2D distance on random node pairs.
+
+    kNN preservation only measures local structure; a layout that collapses into a
+    uniform disc can score well on it while losing the readable branch structure.
+    """
+    n = len(pos)
+    rng = np.random.default_rng(seed)
+    g = coo_matrix((np.ones(len(edges)), (edges[:, 0], edges[:, 1])), shape=(n, n)).tocsr()
+    src = rng.choice(n, min(n_src, n), replace=False)
+    tgt = rng.choice(n, min(n_tgt, n), replace=False)
+    hops = shortest_path(g, directed=False, unweighted=True, indices=src)[:, tgt]
+    dist2d = np.linalg.norm(pos[src][:, None] - pos[tgt][None], axis=2)
+    ok = np.isfinite(hops)
+    return float(spearmanr(hops[ok], dist2d[ok]).statistic)
+
+
 def main():
     name = sys.argv[1] if len(sys.argv) > 1 else "fxa"
     limit = int(sys.argv[2]) if len(sys.argv) > 2 else None
@@ -71,8 +91,8 @@ def main():
         res = subprocess.run([*cmd, str(hashes_path), str(out_path)], capture_output=True, text=True, check=True)
         stats = json.loads(res.stdout.strip().splitlines()[-1])
         data = np.load(out_path)
-        pos, edges = data["pos"], data["edges"]
-        metrics = {"knn_pres": knn_preservation(pos, queries, true_knn)}
+        pos, edges = data["pos"], data["edges"].astype(np.int64)
+        metrics = {"knn_pres": knn_preservation(pos, queries, true_knn), "global": global_structure(pos, edges)}
         if categorical:
             metrics["series_agree"] = label_agreement(pos, color)
         timing = " ".join(f"{k}={v:.1f}" for k, v in stats.items())
