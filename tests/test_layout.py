@@ -55,3 +55,12 @@ def test_small_and_disconnected_inputs(n, edges):
     pos = tree_layout(n, edges)
     assert pos.shape == (n, 2)
     assert np.isfinite(pos).all()
+
+
+def test_small_components_are_packed_close_to_the_main_one():
+    n_main, n_isolated = 1000, 50
+    edges = np.stack([np.arange(1, n_main), np.random.default_rng(0).integers(0, np.arange(1, n_main))], axis=1)
+    n = n_main + n_isolated
+    pos = tree_layout(n, edges)
+    main_extent = np.ptp(pos[:n_main], axis=0).max()
+    assert np.ptp(pos, axis=0).max() < 1.5 * main_extent

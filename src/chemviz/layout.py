@@ -102,6 +102,22 @@ def _radial(n, indptr, nbrs):
     return x, y, comp
 
 
+@nb.njit(cache=True)
+def _components(n, indptr, nbrs):
+    comp = np.full(n, -1, dtype=np.int64)
+    parent = np.full(n, -1, dtype=np.int64)
+    queue = np.empty(n, dtype=np.int64)
+    c = 0
+    for s in range(n):
+        if comp[s] >= 0:
+            continue
+        m = _bfs(indptr, nbrs, s, queue, parent)
+        for i in range(m):
+            comp[queue[i]] = c
+        c += 1
+    return comp
+
+
 def _pack_components(x, y, comp):
     """Shelf-pack components (largest first) into a roughly square area."""
     n_comp = comp.max() + 1
@@ -332,4 +348,12 @@ def tree_layout(
         indptr, nbrs = _tree_csr(lvl_n, lvl_edges)
         iters = iters_fine if lvl_n == n else iters_coarse // 2
         pos = _force_iterations(pos, indptr, nbrs, k, iters, 2 * k, gravity, anchor)
+
+    # Repulsion pushes small components far away: re-pack them tightly around the largest one.
+    if len(edges) < n - 1:
+        comp = _components(n, *_tree_csr(n, edges))
+        counts = np.bincount(comp)
+        centre = np.stack([np.bincount(comp, pos[:, 0]), np.bincount(comp, pos[:, 1])], axis=1) / counts[:, None]
+        rel = pos - centre[comp]
+        pos = np.stack(_pack_components(rel[:, 0], rel[:, 1], comp), axis=1)
     return pos.astype(np.float32)
