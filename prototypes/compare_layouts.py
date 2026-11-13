@@ -20,7 +20,7 @@ from scipy.spatial import cKDTree
 sys.path.insert(0, str(Path(__file__).parent))
 from layouts import force_layout, radial_layout  # noqa: E402
 
-from chemviz import lsh_knn, mhfp, minimum_spanning_forest  # noqa: E402
+from chemviz import lsh_knn, minhash_ecfp, minimum_spanning_forest  # noqa: E402
 
 ROOT = Path(__file__).parent.parent
 OUT = Path(__file__).parent / "out"
@@ -75,10 +75,10 @@ def main():
     n = len(smiles)
 
     t = time.perf_counter()
-    hashes = mhfp(smiles)
+    hashes = minhash_ecfp(smiles)
     idx, dist = lsh_knn(hashes, k=10)
     edges, _ = minimum_spanning_forest(idx, dist)
-    print(f"{name} n={n}: MHFP+kNN+MST {time.perf_counter() - t:.1f}s, {n - len(edges)} components")
+    print(f"{name} n={n}: MinHash+kNN+MST {time.perf_counter() - t:.1f}s, {n - len(edges)} components")
 
     layouts = {
         "radial": lambda: radial_layout(n, edges),
