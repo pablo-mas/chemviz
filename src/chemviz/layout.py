@@ -296,15 +296,22 @@ def _force_iterations(pos, indptr, nbrs, k, n_iter, temp0, gravity, anchor):
     levels = int(np.clip(np.ceil(np.log2(np.sqrt(max(n, 4)))), 2, 12))
     g = 1 << levels
     offsets = np.array([sum(4**j for j in range(lvl)) for lvl in range(levels + 2)], dtype=np.int64)
-    for it in range(n_iter):
-        lo = pos.min(axis=0)
-        span = (pos.max(axis=0) - lo).max() + 1e-9
-        spos, scx, scy, order, cell_start = _sort_by_cell(pos, lo, span, g)
-        mass, sx, sy = _build_pyramid(spos, cell_start, levels, offsets)
-        force = np.empty_like(pos)
-        force[order] = _repulsion(spos, scx, scy, levels, offsets, mass, sx, sy, cell_start, k * k)
-        temp = temp0 * (1 - it / n_iter) + 0.01 * k
-        pos = _step(pos, force, indptr, nbrs, k, gravity, temp, anchor)
+    # Each iteration launches several parallel regions, which costs from microseconds to
+    # milliseconds each (far more on a loaded machine): small levels use fewer threads.
+    max_threads = nb.get_num_threads()
+    nb.set_num_threads(int(np.clip(n // 5000, 1, max_threads)))
+    try:
+        for it in range(n_iter):
+            lo = pos.min(axis=0)
+            span = (pos.max(axis=0) - lo).max() + 1e-9
+            spos, scx, scy, order, cell_start = _sort_by_cell(pos, lo, span, g)
+            mass, sx, sy = _build_pyramid(spos, cell_start, levels, offsets)
+            force = np.empty_like(pos)
+            force[order] = _repulsion(spos, scx, scy, levels, offsets, mass, sx, sy, cell_start, k * k)
+            temp = temp0 * (1 - it / n_iter) + 0.01 * k
+            pos = _step(pos, force, indptr, nbrs, k, gravity, temp, anchor)
+    finally:
+        nb.set_num_threads(max_threads)
     return pos
 
 
