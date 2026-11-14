@@ -1,5 +1,9 @@
 # chemviz
 
+[![PyPI](https://img.shields.io/pypi/v/chemviz)](https://pypi.org/project/chemviz/)
+[![CI](https://github.com/pablo-mas/chemviz/actions/workflows/ci.yml/badge.svg)](https://github.com/pablo-mas/chemviz/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/pablo-mas/chemviz/blob/main/LICENSE)
+
 Fast, easy-to-install chemical space visualization.
 
 chemviz reimplements [TMAP](https://doi.org/10.1186/s13321-020-0416-x) (Probst & Reymond) in
@@ -7,7 +11,7 @@ pure Python + [numba](https://numba.pydata.org/): molecules in, an interactive t
 one line. There is nothing to compile and no conda environment to set up, and it maps millions
 of molecules on a laptop.
 
-![Interactive viewer](docs/images/viewer.png)
+![Interactive viewer](https://raw.githubusercontent.com/pablo-mas/chemviz/main/docs/images/viewer.png)
 
 - **One line**: `cv.tmap("molecules.csv").save("map.html")`.
 - **Fast and light**: 250k molecules in ~8 s, 1M in ~35 s, the whole of ChEMBL (2.9M) in
@@ -97,7 +101,7 @@ ax = m.plot(color="series", s=4)       # categorical: legend
 ax.figure.savefig("map.png", dpi=200)
 ```
 
-![Static plot](docs/images/tmap_static.png)
+![Static plot](https://raw.githubusercontent.com/pablo-mas/chemviz/main/docs/images/tmap_static.png)
 
 ## Parameters
 
@@ -165,7 +169,7 @@ Map quality, comparing chemviz with tmap:
 - **Global structure**: the Spearman correlation between distance along the tree and distance
   in 2D.
 
-Scripts are in [`benchmarks/`](benchmarks/).
+Scripts are in [`benchmarks/`](https://github.com/pablo-mas/chemviz/tree/main/benchmarks).
 
 ## Credits
 
