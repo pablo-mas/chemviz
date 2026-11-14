@@ -48,3 +48,19 @@ def test_knn_recall_against_brute_force(clustered_hashes):
 def test_d_not_divisible_by_n_trees_raises(clustered_hashes):
     with pytest.raises(ValueError):
         lsh_knn(clustered_hashes[:, :100], n_trees=8)
+
+
+@pytest.mark.parametrize("band", [1, 5, 16])
+def test_index_order_and_lcp(band):
+    from chemviz.lsh import _build
+
+    rng = np.random.default_rng(1)
+    hashes = rng.integers(0, 3, size=(500, 2 * band), dtype=np.uint32)  # many shared prefixes and duplicates
+    order, rank, lcp = _build(hashes, 2, band)
+    for t in range(2):
+        keys = hashes[order[t], t * band:(t + 1) * band]
+        expected = hashes[np.lexsort(hashes[:, t * band:(t + 1) * band].T[::-1]), t * band:(t + 1) * band]
+        np.testing.assert_array_equal(keys, expected)
+        np.testing.assert_array_equal(order[t][rank[t]], np.arange(500))
+        same = keys[1:] == keys[:-1]
+        np.testing.assert_array_equal(lcp[t, 1:], np.where(same.all(1), band, same.argmin(1)))
