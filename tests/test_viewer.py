@@ -67,7 +67,7 @@ def test_columns_subset_and_unknown(tmap):
 def test_save_writes_self_contained_page(tmap, tmp_path):
     path = tmp_path / "my map.html"
     tmap.save(path)
-    html = path.read_text()
+    html = path.read_text(encoding="utf-8")
     assert "<title>my map</title>" in html
     assert "__CHEMVIZ" not in html
     assert "</script>" not in re.search(r'id="chemviz-header">(.*?)</script>', html, re.S).group(1)

@@ -33,7 +33,7 @@ def read_molecules(path: str | Path, smiles: str | None = None) -> tuple[pd.Data
         return df, smiles or find_smiles_column(df)
     if suffix == ".smi":
         rows = []
-        for line in path.read_text().splitlines():
+        for line in path.read_text(encoding="utf-8").splitlines():
             parts = line.split(maxsplit=1)
             if parts:
                 rows.append({"smiles": parts[0], "name": parts[1] if len(parts) > 1 else None})

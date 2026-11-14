@@ -64,7 +64,7 @@ def test_missing_smiles_column_raises():
 
 def test_csv_smi_and_sdf_files(tmp_path):
     pd.DataFrame({"smiles": SMILES, "series": SERIES}).to_csv(tmp_path / "mols.csv", index=False)
-    (tmp_path / "mols.smi").write_text("\n".join(f"{s} mol{i}" for i, s in enumerate(SMILES)))
+    (tmp_path / "mols.smi").write_text("\n".join(f"{s} mol{i}" for i, s in enumerate(SMILES)), encoding="utf-8")
     writer = Chem.SDWriter(str(tmp_path / "mols.sdf"))
     for s, series in zip(SMILES, SERIES):
         mol = Chem.MolFromSmiles(s)
