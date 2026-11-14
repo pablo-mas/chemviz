@@ -3,18 +3,70 @@
 The map is written as a single HTML file: a JSON header describing the columns and
 one zlib-compressed, base64-encoded binary blob holding coordinates, edges and
 column values, which the page decompresses natively (``DecompressionStream``).
-Structures are drawn on hover by RDKit.js, loaded from a CDN.
+Structures are drawn on hover by RDKit.js, loaded from a CDN, or embedded in the
+page for offline use (downloaded once, then cached).
 """
 
 import base64
+import hashlib
 import json
+import os
+import sys
+import urllib.request
 import zlib
 from importlib.resources import files
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 MAX_CATEGORIES = 1000  # object columns with more distinct values are treated as free text
+
+RDKIT_JS_VERSION = "2026.9.1"  # keep in sync with RDKIT_URL in viewer.html
+RDKIT_JS_URL = f"https://cdn.jsdelivr.net/npm/@rdkit/rdkit@{RDKIT_JS_VERSION}/dist/"
+RDKIT_JS_FILES = {
+    "RDKit_minimal.js": "ea427db9cc39be245065603de0df10c3053cb49af3b63fdf6bc2bf73d6fc17da",
+    "RDKit_minimal.wasm": "594ceaed387adc70ea13bfbb2e8eace916f6c782254ed5a6f0f0a0a7a4fe4061",
+}
+
+
+def cache_dir() -> Path:
+    """Where downloaded assets are kept: $CHEMVIZ_CACHE, else the platform user cache."""
+    if "CHEMVIZ_CACHE" in os.environ:
+        return Path(os.environ["CHEMVIZ_CACHE"])
+    if sys.platform == "win32":
+        base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+    elif sys.platform == "darwin":
+        base = Path.home() / "Library" / "Caches"
+    else:
+        base = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
+    return base / "chemviz"
+
+
+def rdkit_js_files() -> dict[str, bytes]:
+    """RDKit.js script and WebAssembly module, downloaded on first use and checked by SHA-256."""
+    folder = cache_dir() / f"rdkit-js-{RDKIT_JS_VERSION}"
+    out = {}
+    for name, sha256 in RDKIT_JS_FILES.items():
+        path = folder / name
+        content = path.read_bytes() if path.exists() else None
+        if content is None or hashlib.sha256(content).hexdigest() != sha256:
+            try:
+                with urllib.request.urlopen(RDKIT_JS_URL + name, timeout=60) as response:
+                    content = response.read()
+            except OSError as e:
+                raise RuntimeError(
+                    f"offline=True needs RDKit.js, which could not be downloaded from {RDKIT_JS_URL} ({e}). "
+                    f"Connect once to cache it in {folder}, or copy {list(RDKIT_JS_FILES)} there."
+                ) from e
+            if hashlib.sha256(content).hexdigest() != sha256:
+                raise RuntimeError(f"Downloaded {name} does not match its expected SHA-256; not using it")
+            folder.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(path.suffix + ".tmp")
+            tmp.write_bytes(content)
+            tmp.replace(path)
+        out[name] = content
+    return out
 
 
 def _column_payload(name, values: pd.Series, force_text: bool = False):
@@ -85,15 +137,28 @@ def build_payload(x, y, edges, data: pd.DataFrame, smiles: str | None, columns=N
     return header, blob
 
 
-def to_html(x, y, edges, data, smiles, columns=None, title: str = "chemviz") -> str:
+def to_html(x, y, edges, data, smiles, columns=None, title: str = "chemviz", offline: bool = False) -> str:
     header, blob = build_payload(x, y, edges, data, smiles, columns, title)
     template = files("chemviz").joinpath("viewer.html").read_text(encoding="utf-8")
     header_json = json.dumps(header, allow_nan=False).replace("</", "<\\/")
+    rdkit = ""
+    if offline and smiles is not None:
+        rdkit = "".join(
+            f'<script type="application/octet-stream" id="chemviz-{name.replace(".", "-").lower()}">'
+            f"{_pack(content)}</script>\n"
+            for name, content in rdkit_js_files().items()
+        )
     return (
         template.replace("__CHEMVIZ_TITLE__", _escape(title))
         .replace("__CHEMVIZ_HEADER__", header_json)
-        .replace("__CHEMVIZ_DATA__", base64.b64encode(blob).decode("ascii"))
+        .replace("__CHEMVIZ_RDKIT__", rdkit)
+        .replace("__CHEMVIZ_DATA__", _pack(blob, compressed=True))
     )
+
+
+def _pack(content: bytes, compressed: bool = False) -> str:
+    """zlib-compressed, base64-encoded bytes (decoded in the page by DecompressionStream)."""
+    return base64.b64encode(content if compressed else zlib.compress(content, 9)).decode("ascii")
 
 
 def _escape(text: str) -> str:

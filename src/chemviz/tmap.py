@@ -35,23 +35,25 @@ class TMap:
         """The input rows with ``x`` and ``y`` columns added."""
         return self.data.assign(x=self.x, y=self.y)
 
-    def to_html(self, columns=None, title: str = "chemviz") -> str:
+    def to_html(self, columns=None, title: str = "chemviz", offline: bool = False) -> str:
         """The interactive WebGL viewer as a self-contained HTML page.
 
         ``columns`` restricts the ``data`` columns embedded (all by default); they can
         be used to colour, filter, search and are shown on hover. Structures are drawn
-        with RDKit.js, loaded from a CDN when the page opens.
+        with RDKit.js, loaded from a CDN when the page opens; with ``offline=True`` it
+        is embedded instead (about 3.3 MB more), so the page needs no network at all.
+        RDKit.js is then downloaded once and cached (see ``chemviz.viewer.cache_dir``).
         """
         from chemviz.viewer import to_html
 
-        return to_html(self.x, self.y, self.edges, self.data, self.smiles, columns, title)
+        return to_html(self.x, self.y, self.edges, self.data, self.smiles, columns, title, offline)
 
-    def save(self, path, columns=None, title: str | None = None) -> None:
+    def save(self, path, columns=None, title: str | None = None, offline: bool = False) -> None:
         """Write the interactive viewer to an HTML file (see ``to_html``)."""
         path = Path(path)
-        path.write_text(self.to_html(columns, title or path.stem), encoding="utf-8")
+        path.write_text(self.to_html(columns, title or path.stem, offline), encoding="utf-8")
 
-    def show(self, columns=None, title: str = "chemviz", height: int = 650):
+    def show(self, columns=None, title: str = "chemviz", height: int = 650, offline: bool = False):
         """Display the interactive viewer inline in a Jupyter notebook (see ``to_html``)."""
         try:
             from IPython.display import HTML
@@ -59,7 +61,7 @@ class TMap:
             raise ImportError("show() needs IPython (Jupyter); use save('map.html') instead") from e
         import html
 
-        doc = html.escape(self.to_html(columns, title), quote=True)
+        doc = html.escape(self.to_html(columns, title, offline), quote=True)
         return HTML(f'<iframe srcdoc="{doc}" style="width:100%;height:{int(height)}px;border:0" '
                     'sandbox="allow-scripts allow-downloads"></iframe>')
 

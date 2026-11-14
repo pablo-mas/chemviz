@@ -121,6 +121,7 @@ label.slider input { flex: 1; }
 </div>
 <script type="application/json" id="chemviz-header">__CHEMVIZ_HEADER__</script>
 <script type="application/octet-stream" id="chemviz-data">__CHEMVIZ_DATA__</script>
+__CHEMVIZ_RDKIT__
 <script>
 "use strict";
 const RDKIT_URL = "https://cdn.jsdelivr.net/npm/@rdkit/rdkit@2026.9.1/dist/";
@@ -157,11 +158,15 @@ function formatValue(v, integer) {
 }
 
 // ---------------------------------------------------------------- data
+async function unpack(id) {  // base64 + zlib payload embedded in a <script> tag
+  const b64 = $(id).textContent.trim();
+  const compressed = await (await fetch("data:application/octet-stream;base64," + b64)).blob();
+  return new Response(compressed.stream().pipeThrough(new DecompressionStream("deflate"))).arrayBuffer();
+}
+
 async function loadData() {
   const header = JSON.parse($("chemviz-header").textContent);
-  const b64 = $("chemviz-data").textContent.trim();
-  const compressed = await (await fetch("data:application/octet-stream;base64," + b64)).blob();
-  const buf = await new Response(compressed.stream().pipeThrough(new DecompressionStream("deflate"))).arrayBuffer();
+  const buf = await unpack("chemviz-data");
   const view = (Type, [offset, length]) => new Type(buf, offset, length / Type.BYTES_PER_ELEMENT);
   const columns = header.columns.map((c) => {
     const ref = [c.offset, c.length];
@@ -363,6 +368,21 @@ class Grid {
 // ---------------------------------------------------------------- RDKit.js (lazy)
 let rdkitPromise = null;
 function rdkit() {
+  if (!rdkitPromise && $("chemviz-rdkit_minimal-wasm")) {  // embedded for offline use
+    rdkitPromise = (async () => {
+      const [js, wasm] = await Promise.all([unpack("chemviz-rdkit_minimal-js"), unpack("chemviz-rdkit_minimal-wasm")]);
+      const s = document.createElement("script");
+      s.textContent = new TextDecoder().decode(js);
+      document.head.appendChild(s);
+      // Hand over the embedded module instead of letting RDKit.js fetch RDKit_minimal.wasm.
+      return window.initRDKitModule({
+        instantiateWasm: (imports, receive) => {
+          WebAssembly.instantiate(wasm, imports).then((r) => receive(r.instance));
+          return {};
+        },
+      });
+    })().catch((e) => { console.warn(e); return null; });
+  }
   if (!rdkitPromise) {
     rdkitPromise = new Promise((resolve, reject) => {
       const s = document.createElement("script");
@@ -704,7 +724,7 @@ async function main() {
       if (token !== tooltipToken) return;
       const svg = RDKit ? structureSvg(RDKit, smiles) : "";
       const box = tooltip.querySelector(".mol");
-      if (box) box.innerHTML = svg || `<div class="muted">${RDKit ? "Cannot draw structure" : "Structure drawing needs internet access (RDKit.js)"}</div>`;
+      if (box) box.innerHTML = svg || `<div class="muted">${RDKit ? "Cannot draw structure" : "Structure drawing needs internet access (or save the map with offline=True)"}</div>`;
       placeTooltip(px, py);
     }
   }

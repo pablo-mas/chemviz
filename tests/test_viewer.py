@@ -96,3 +96,67 @@ def test_show_returns_iframe(tmap):
 def test_build_payload_without_edges():
     header, blob = build_payload(np.zeros(1), np.zeros(1), np.empty((0, 2)), pd.DataFrame(index=[0]), None)
     assert header["n"] == 1 and header["edges"][1] == 0
+
+
+@pytest.fixture
+def fake_rdkit_js(monkeypatch, tmp_path):
+    """Serve fake RDKit.js files instead of downloading them; returns the list of fetched URLs."""
+    import hashlib
+    import io
+
+    from chemviz import viewer
+
+    contents = {"RDKit_minimal.js": b"var initRDKitModule = 1;", "RDKit_minimal.wasm": b"\0asm fake"}
+    monkeypatch.setattr(viewer, "RDKIT_JS_FILES", {k: hashlib.sha256(v).hexdigest() for k, v in contents.items()})
+    monkeypatch.setenv("CHEMVIZ_CACHE", str(tmp_path / "cache"))
+    fetched = []
+
+    def urlopen(url, timeout):
+        fetched.append(url)
+        return io.BytesIO(contents[url.rsplit("/", 1)[1]])
+
+    monkeypatch.setattr(viewer.urllib.request, "urlopen", urlopen)
+    return contents, fetched
+
+
+def test_offline_embeds_rdkit_js(tmap, fake_rdkit_js):
+    contents, fetched = fake_rdkit_js
+    html = tmap.to_html(offline=True)
+    for name, element in [("RDKit_minimal.js", "rdkit_minimal-js"), ("RDKit_minimal.wasm", "rdkit_minimal-wasm")]:
+        b64 = re.search(rf'id="chemviz-{element}">(.*?)</script>', html, re.S).group(1)
+        assert zlib.decompress(base64.b64decode(b64)) == contents[name]
+    assert len(fetched) == 2
+    tmap.to_html(offline=True)
+    assert len(fetched) == 2  # cached
+    assert 'id="chemviz-rdkit' not in tmap.to_html()  # online by default
+
+
+def test_offline_redownloads_corrupted_cache(tmap, fake_rdkit_js):
+    from chemviz.viewer import RDKIT_JS_VERSION, cache_dir
+
+    _, fetched = fake_rdkit_js
+    tmap.to_html(offline=True)
+    (cache_dir() / f"rdkit-js-{RDKIT_JS_VERSION}" / "RDKit_minimal.wasm").write_bytes(b"truncated")
+    tmap.to_html(offline=True)
+    assert len(fetched) == 3
+
+
+def test_offline_rejects_bad_download_and_reports_network_errors(tmap, fake_rdkit_js, monkeypatch):
+    from chemviz import viewer
+
+    monkeypatch.setitem(viewer.RDKIT_JS_FILES, "RDKit_minimal.js", "0" * 64)
+    with pytest.raises(RuntimeError, match="SHA-256"):
+        tmap.to_html(offline=True)
+
+    def no_network(url, timeout):
+        raise OSError("no route to host")
+
+    monkeypatch.setattr(viewer.urllib.request, "urlopen", no_network)
+    with pytest.raises(RuntimeError, match="could not be downloaded"):
+        tmap.to_html(offline=True)
+
+
+def test_offline_without_smiles_embeds_nothing(fake_rdkit_js):
+    _, fetched = fake_rdkit_js
+    m = cv.tmap(np.random.default_rng(0).random((30, 256)) < 0.1)
+    assert 'id="chemviz-rdkit' not in m.to_html(offline=True) and not fetched
