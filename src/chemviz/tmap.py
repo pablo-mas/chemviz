@@ -21,6 +21,7 @@ class TMap:
     ``x``, ``y`` and ``data`` rows are aligned (one per mapped molecule); ``edges``
     holds pairs of row positions. ``data`` keeps the input rows and index, minus
     ``invalid`` (positions in the input of the molecules that could not be parsed).
+    ``smiles`` names the SMILES column of ``data``, if any (used to draw structures).
     """
 
     x: np.ndarray
@@ -28,10 +29,39 @@ class TMap:
     edges: np.ndarray
     data: pd.DataFrame
     invalid: np.ndarray
+    smiles: str | None = None
 
     def to_dataframe(self) -> pd.DataFrame:
         """The input rows with ``x`` and ``y`` columns added."""
         return self.data.assign(x=self.x, y=self.y)
+
+    def to_html(self, columns=None, title: str = "chemviz") -> str:
+        """The interactive WebGL viewer as a self-contained HTML page.
+
+        ``columns`` restricts the ``data`` columns embedded (all by default); they can
+        be used to colour, filter, search and are shown on hover. Structures are drawn
+        with RDKit.js, loaded from a CDN when the page opens.
+        """
+        from chemviz.viewer import to_html
+
+        return to_html(self.x, self.y, self.edges, self.data, self.smiles, columns, title)
+
+    def save(self, path, columns=None, title: str | None = None) -> None:
+        """Write the interactive viewer to an HTML file (see ``to_html``)."""
+        path = Path(path)
+        path.write_text(self.to_html(columns, title or path.stem), encoding="utf-8")
+
+    def show(self, columns=None, title: str = "chemviz", height: int = 650):
+        """Display the interactive viewer inline in a Jupyter notebook (see ``to_html``)."""
+        try:
+            from IPython.display import HTML
+        except ImportError as e:
+            raise ImportError("show() needs IPython (Jupyter); use save('map.html') instead") from e
+        import html
+
+        doc = html.escape(self.to_html(columns, title), quote=True)
+        return HTML(f'<iframe srcdoc="{doc}" style="width:100%;height:{int(height)}px;border:0" '
+                    'sandbox="allow-scripts allow-downloads"></iframe>')
 
     def plot(self, color=None, ax=None, edges: bool = True, cmap=None, **scatter_kws):
         """Static matplotlib plot. ``color`` is a column of ``data`` or an array of values.
@@ -99,7 +129,7 @@ def tmap(
     Forest with ``n_trees`` trees, ``k * kc`` candidates), reduced to a minimum spanning
     tree and laid out in 2D. Unparsable SMILES are skipped with a warning.
     """
-    hashes, frame, invalid = _encode(data, smiles, n_permutations, radius, n_jobs)
+    hashes, frame, smiles, invalid = _encode(data, smiles, n_permutations, radius, n_jobs)
     if invalid:
         warnings.warn(
             f"Skipped {len(invalid)} invalid molecule(s) at input positions "
@@ -118,19 +148,19 @@ def tmap(
         idx, dist = lsh_knn(hashes, k=min(k, n - 1), n_trees=n_trees, kc=kc)
         edges, _ = minimum_spanning_forest(idx, dist)
     pos = tree_layout(n, edges, seed=seed)
-    return TMap(pos[:, 0], pos[:, 1], edges, frame, np.asarray(invalid, dtype=np.int64))
+    return TMap(pos[:, 0], pos[:, 1], edges, frame, np.asarray(invalid, dtype=np.int64), smiles)
 
 
 def _encode(data, smiles, n_permutations, radius, n_jobs):
-    """MinHash vectors, the matching DataFrame and invalid input positions for any supported input."""
+    """MinHash vectors, matching DataFrame, its SMILES column (or None) and invalid input positions."""
     if isinstance(data, (str, Path)):
         data, smiles = read_molecules(data, smiles)
     if isinstance(data, np.ndarray) and data.ndim == 2:
         frame = pd.DataFrame(index=pd.RangeIndex(len(data)))
         if data.dtype == np.uint32:
-            return data, frame, []
+            return data, frame, None, []
         if data.dtype == bool or (np.issubdtype(data.dtype, np.integer) and np.isin(data, (0, 1)).all()):
-            return minhash_from_fingerprints(data, n_permutations=n_permutations), frame, []
+            return minhash_from_fingerprints(data, n_permutations=n_permutations), frame, None, []
         raise ValueError(
             "A 2D array must hold uint32 MinHash vectors or binary (0/1) fingerprints; "
             f"got dtype {data.dtype}"
@@ -143,4 +173,4 @@ def _encode(data, smiles, n_permutations, radius, n_jobs):
         frame = pd.DataFrame({column: list(data)}, index=data.index if isinstance(data, pd.Series) else None)
     values = frame[column].fillna("").astype(str).tolist()
     hashes, invalid = _minhash_ecfp(values, n_permutations, radius, 42, 10_000, n_jobs)
-    return hashes, frame, invalid
+    return hashes, frame, column, invalid
