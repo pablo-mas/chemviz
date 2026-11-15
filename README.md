@@ -54,7 +54,7 @@ m.plot(color="activity")        # static matplotlib figure
 
 Invalid SMILES are skipped with a warning; their input positions are kept in `m.invalid`.
 
-The result is a `TMap`:
+The result is a `Map`:
 
 ```python
 m.x, m.y          # coordinates (numpy arrays), one per molecule

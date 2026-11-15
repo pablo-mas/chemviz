@@ -19,7 +19,7 @@ SERIES = ["alcohol"] * 10 + ["benzene"] * 10 + ["amino_acid"] * 10
 
 
 def check_map(m, n):
-    assert isinstance(m, cv.TMap)
+    assert isinstance(m, cv.Map)
     assert m.x.shape == m.y.shape == (n,)
     assert len(m.data) == n
     assert m.edges.shape == (n - 1, 2)  # a single tree over valid molecules
