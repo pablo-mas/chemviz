@@ -174,8 +174,8 @@ Map quality, comparing chemviz with tmap:
 
 | Metric | ZINC250k | ChEMBL 1M |
 |---|---|---|
-| kNN preservation (local) | 0.317 vs 0.321 | 0.431 vs 0.448 |
-| Global structure | **0.776** vs 0.707 | **0.653** vs 0.633 |
+| kNN preservation (local) | 0.319 vs 0.321 | 0.437 vs 0.448 |
+| Global structure | **0.777** vs 0.707 | **0.652** vs 0.633 |
 
 - **kNN preservation**: the share of each molecule's 10 exact MinHash neighbours that are
   among its 10 nearest points in 2D.
