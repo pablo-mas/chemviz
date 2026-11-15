@@ -20,6 +20,7 @@ of molecules on a laptop.
 - **Interactive viewer**: a single self-contained HTML file (WebGL) that shows the structure
   on hover, colours, filters, searches, lasso-selects and exports to CSV. It also works offline.
 - **Static plots** with matplotlib, for papers and reports.
+- **Command line**: `chemviz tmap molecules.csv -o map.html`.
 
 ## Installation
 
@@ -61,6 +62,18 @@ m.edges           # (n - 1, 2) tree edges, as row positions
 m.data            # the input rows (all columns, original index), minus invalid molecules
 m.to_dataframe()  # data + x, y columns
 ```
+
+## Command line
+
+```bash
+chemviz tmap molecules.csv                      # writes molecules.html
+chemviz tmap molecules.csv -o map.html -o map.png --color pKi
+chemviz tmap library.sdf -o coords.csv          # data + x, y coordinates
+```
+
+Each `-o` output is written according to its extension: `.html` (interactive viewer),
+`.png` / `.svg` / `.pdf` (static plot) or `.csv`. Options mirror the Python API (`--smiles`,
+`--columns`, `--offline`, `-k`, `--seed`…); see `chemviz tmap --help`.
 
 ## Interactive viewer
 
