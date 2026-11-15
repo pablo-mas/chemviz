@@ -430,7 +430,7 @@ def tree_layout(
     n: int,
     edges: np.ndarray,
     iters_coarse: int = 300,
-    iters_fine: int = 50,
+    iters_fine: int = 100,
     min_nodes: int = 500,
     gravity: float = 2.0,
     seed: int = 0,
