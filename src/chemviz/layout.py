@@ -419,7 +419,7 @@ def tree_layout(
 ) -> np.ndarray:
     """2D layout of a spanning forest over ``n`` nodes (e.g. from ``minimum_spanning_forest``).
 
-    ``iters_coarse`` force iterations are run on the coarsest level (half as many on
+    ``iters_coarse`` force iterations are run on the coarsest level (a third as many on
     intermediate levels) and ``iters_fine`` on the full tree. Coarsening stops once a
     level has at most ``min_nodes`` nodes. Results are deterministic for a given ``seed``.
 
@@ -458,7 +458,7 @@ def tree_layout(
         anchor = pos[group]
         pos = anchor + rng.normal(scale=0.1 * k, size=(lvl_n, 2))  # place members at their group
         indptr, nbrs = _tree_csr(lvl_n, lvl_edges)
-        iters = iters_fine if lvl_n == n else iters_coarse // 2
+        iters = iters_fine if lvl_n == n else iters_coarse // 3
         pos = _force_iterations(pos, indptr, nbrs, k, iters, 2 * k, gravity, anchor)
 
     # Repulsion pushes small components far away: re-pack them tightly around the largest one.
