@@ -33,6 +33,9 @@ dependencies = [
     "rdkit>=2023.9.1",
 ]
 
+[project.scripts]
+chemviz = "chemviz.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/pablo-mas/chemviz"
 Repository = "https://github.com/pablo-mas/chemviz"
