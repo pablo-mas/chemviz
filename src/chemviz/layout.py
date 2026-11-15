@@ -184,50 +184,78 @@ def _build_pyramid(spos, cell_start, levels, offsets, mass, sx, sy):
 
 
 @nb.njit(cache=True, parallel=True)
-def _repulsion(spos, cx, cy, order, levels, offsets, mass, sx, sy, cell_start, k2, force):
+def _repulsion(spos, levels, offsets, mass, sx, sy, cell_start, k2, order, force):
     """Repulsive forces, written to ``force`` in original order.
 
-    Inputs are in cell order (``_sort_by_cell``) for memory locality.
+    Inputs are in cell order (``_sort_by_cell``). All particles of a finest cell share
+    their far-field interaction lists, so the coarse levels (all but the finest) are
+    evaluated once per cell at its centroid, as a force and its Jacobian, and extended
+    to each particle by a first-order Taylor expansion. The finest far-field level and
+    the near field (3x3 neighbouring finest cells, exact) are computed per particle.
     """
-    n = spos.shape[0]
     g_fine = 1 << levels
-    for i in nb.prange(n):
-        xi, yi = spos[i, 0], spos[i, 1]
-        fx, fy = 0.0, 0.0
-        # Far field: cells that are children of the parent's neighbours but not neighbours themselves.
-        for lvl in range(2, levels + 1):
+    for c in nb.prange(g_fine * g_fine):
+        start, stop = cell_start[c], cell_start[c + 1]
+        if start == stop:
+            continue
+        ci, cj = c // g_fine, c % g_fine
+        x0, y0 = sx[offsets[levels] + c] / (stop - start), sy[offsets[levels] + c] / (stop - start)
+        fx0, fy0, jxx, jxy = 0.0, 0.0, 0.0, 0.0  # force at the centroid; Jyy = -Jxx (harmonic field)
+        for lvl in range(2, levels):
             shift = levels - lvl
             g = 1 << lvl
-            ci, cj = cx[i] >> shift, cy[i] >> shift
-            pi, pj = ci >> 1, cj >> 1
+            li, lj = ci >> shift, cj >> shift
+            pi, pj = li >> 1, lj >> 1
             for a in range(max(0, 2 * (pi - 1)), min(g, 2 * (pi + 2))):
                 for b in range(max(0, 2 * (pj - 1)), min(g, 2 * (pj + 2))):
-                    if abs(a - ci) <= 1 and abs(b - cj) <= 1:
+                    if abs(a - li) <= 1 and abs(b - lj) <= 1:
                         continue
                     cell = offsets[lvl] + a * g + b
                     m = mass[cell]
                     if m == 0.0:
                         continue
-                    dx = xi - sx[cell] / m
-                    dy = yi - sy[cell] / m
+                    dx = x0 - sx[cell] / m
+                    dy = y0 - sy[cell] / m
+                    inv = 1.0 / (dx * dx + dy * dy + 1e-9)
+                    w = m * k2 * inv
+                    fx0 += w * dx
+                    fy0 += w * dy
+                    jxx += w * (1.0 - 2.0 * dx * dx * inv)
+                    jxy -= w * 2.0 * dx * dy * inv
+        pi, pj = ci >> 1, cj >> 1
+        for i in range(start, stop):
+            xi, yi = spos[i, 0], spos[i, 1]
+            ox, oy = xi - x0, yi - y0
+            fx = fx0 + jxx * ox + jxy * oy
+            fy = fy0 + jxy * ox - jxx * oy
+            # Finest far-field level, per particle.
+            for a in range(max(0, 2 * (pi - 1)), min(g_fine, 2 * (pi + 2))):
+                for b in range(max(0, 2 * (pj - 1)), min(g_fine, 2 * (pj + 2))):
+                    if abs(a - ci) <= 1 and abs(b - cj) <= 1:
+                        continue
+                    cell = a * g_fine + b
+                    m = mass[offsets[levels] + cell]
+                    if m == 0.0:
+                        continue
+                    dx = xi - sx[offsets[levels] + cell] / m
+                    dy = yi - sy[offsets[levels] + cell] / m
                     d2 = dx * dx + dy * dy + 1e-9
                     fx += m * k2 * dx / d2
                     fy += m * k2 * dy / d2
-        # Near field: exact interactions with particles in the 3x3 neighbouring finest cells.
-        ci, cj = cx[i], cy[i]
-        for a in range(max(0, ci - 1), min(g_fine, ci + 2)):
-            for b in range(max(0, cj - 1), min(g_fine, cj + 2)):
-                c = a * g_fine + b
-                for j in range(cell_start[c], cell_start[c + 1]):
-                    if j == i:
-                        continue
-                    dx = xi - spos[j, 0]
-                    dy = yi - spos[j, 1]
-                    d2 = dx * dx + dy * dy + 1e-9
-                    fx += k2 * dx / d2
-                    fy += k2 * dy / d2
-        force[order[i], 0] = fx
-        force[order[i], 1] = fy
+            # Near field: exact interactions with particles in the 3x3 neighbouring finest cells.
+            for a in range(max(0, ci - 1), min(g_fine, ci + 2)):
+                for b in range(max(0, cj - 1), min(g_fine, cj + 2)):
+                    cell = a * g_fine + b
+                    for j in range(cell_start[cell], cell_start[cell + 1]):
+                        if j == i:
+                            continue
+                        dx = xi - spos[j, 0]
+                        dy = yi - spos[j, 1]
+                        d2 = dx * dx + dy * dy + 1e-9
+                        fx += k2 * dx / d2
+                        fy += k2 * dy / d2
+            force[order[i], 0] = fx
+            force[order[i], 1] = fy
 
 
 @nb.njit(cache=True, parallel=True)
@@ -251,10 +279,10 @@ def _step(pos, force, indptr, nbrs, k, gravity, temp, anchor, new):
 
 
 @nb.njit(cache=True, parallel=True)
-def _sort_by_cell(pos, g, cell, slot, cell_start, order, spos, scx, scy):
+def _sort_by_cell(pos, g, cell, slot, cell_start, order, spos):
     """Group particles by finest-grid cell (counting sort), filling the given buffers.
 
-    Gives positions and cell coordinates in cell order, the permutation ``order``
+    Gives positions in cell order, the permutation ``order``
     (sorted index -> original index) and the CSR-style ``cell_start`` offsets.
     """
     n = pos.shape[0]
@@ -283,7 +311,6 @@ def _sort_by_cell(pos, g, cell, slot, cell_start, order, spos, scx, scy):
         p = slot[i]
         order[p] = i
         spos[p, 0], spos[p, 1] = pos[i, 0], pos[i, 1]
-        scx[p], scy[p] = cell[i] // g, cell[i] % g
 
 
 @nb.njit(cache=True)
@@ -295,17 +322,15 @@ def _iterate(pos, indptr, nbrs, k, n_iter, temp0, gravity, anchor, levels, offse
     cell_start = np.empty(g * g + 1, dtype=np.int64)
     order = np.empty(n, dtype=np.int64)
     spos = np.empty_like(pos)
-    scx = np.empty(n, dtype=np.int64)
-    scy = np.empty(n, dtype=np.int64)
     mass = np.empty(offsets[-1])
     sx = np.empty(offsets[-1])
     sy = np.empty(offsets[-1])
     force = np.empty_like(pos)
     new = np.empty_like(pos)
     for it in range(n_iter):
-        _sort_by_cell(pos, g, cell, slot, cell_start, order, spos, scx, scy)
+        _sort_by_cell(pos, g, cell, slot, cell_start, order, spos)
         _build_pyramid(spos, cell_start, levels, offsets, mass, sx, sy)
-        _repulsion(spos, scx, scy, order, levels, offsets, mass, sx, sy, cell_start, k * k, force)
+        _repulsion(spos, levels, offsets, mass, sx, sy, cell_start, k * k, order, force)
         temp = temp0 * (1 - it / n_iter) + 0.01 * k
         _step(pos, force, indptr, nbrs, k, gravity, temp, anchor, new)
         pos, new = new, pos
