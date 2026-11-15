@@ -62,6 +62,11 @@ def test_missing_smiles_column_raises():
         cv.tmap(pd.DataFrame({"a": SMILES, "b": SERIES}))
 
 
+def test_unknown_smiles_column_raises():
+    with pytest.raises(ValueError, match="No SMILES column 'smi'"):
+        cv.tmap(pd.DataFrame({"a": SMILES, "b": SERIES}), smiles="smi")
+
+
 def test_csv_smi_and_sdf_files(tmp_path):
     pd.DataFrame({"smiles": SMILES, "series": SERIES}).to_csv(tmp_path / "mols.csv", index=False)
     (tmp_path / "mols.smi").write_text("\n".join(f"{s} mol{i}" for i, s in enumerate(SMILES)), encoding="utf-8")

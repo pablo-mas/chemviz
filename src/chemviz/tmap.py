@@ -170,6 +170,8 @@ def _encode(data, smiles, n_permutations, radius, n_jobs):
     if isinstance(data, pd.DataFrame):
         frame = data
         column = smiles or find_smiles_column(data)
+        if column not in frame.columns:
+            raise ValueError(f"No SMILES column {column!r}; available: {list(frame.columns)}")
     else:
         column = smiles or "smiles"
         frame = pd.DataFrame({column: list(data)}, index=data.index if isinstance(data, pd.Series) else None)
