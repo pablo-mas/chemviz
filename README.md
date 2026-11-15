@@ -14,8 +14,8 @@ of molecules on a laptop.
 ![Interactive viewer](https://raw.githubusercontent.com/pablo-mas/chemviz/main/docs/images/viewer.png)
 
 - **One line**: `cv.tmap("molecules.csv").save("map.html")`.
-- **Fast and light**: 250k molecules in ~4 s, 1M in ~17 s, the whole of ChEMBL (2.9M) in
-  under 2 minutes with 4 GB of RAM. That is 3–3.5× faster than the original tmap, with 3–4×
+- **Fast and light**: 250k molecules in ~5 s, 1M in ~20 s, the whole of ChEMBL (2.9M) in
+  under 2 minutes with 4 GB of RAM. That is 2.5–3× faster than the original tmap, with 3–4×
   less memory (see [benchmarks](#benchmarks)).
 - **Interactive viewer**: a single self-contained HTML file (WebGL) that shows the structure
   on hover, colours, filters, searches, lasso-selects and exports to CSV. It also works offline.
@@ -166,16 +166,16 @@ is for the whole process. Measured on an Intel i7-12700K (20 threads) with 15 GB
 
 | Dataset | chemviz | tmap (original) |
 |---|---|---|
-| ZINC250k (249k) | **4.2 s**, 0.5 GB | 12.7 s, 1.5 GB |
-| ChEMBL subset (1M) | **17 s**, 1.4 GB | 62 s, 6.2 GB |
-| ChEMBL 37 (2.9M), end to end | **99 s**, 4.3 GB | out of memory |
+| ZINC250k (249k) | **5.4 s**, 0.5 GB | 12.7 s, 1.5 GB |
+| ChEMBL subset (1M) | **20 s**, 1.4 GB | 62 s, 6.2 GB |
+| ChEMBL 37 (2.9M), end to end | **110 s**, 4.3 GB | out of memory |
 
 Map quality, comparing chemviz with tmap:
 
 | Metric | ZINC250k | ChEMBL 1M |
 |---|---|---|
-| kNN preservation (local) | 0.319 vs 0.321 | 0.437 vs 0.448 |
-| Global structure | **0.777** vs 0.707 | **0.652** vs 0.633 |
+| kNN preservation (local) | 0.320 vs 0.321 | 0.439 vs 0.448 |
+| Global structure | **0.777** vs 0.707 | **0.653** vs 0.633 |
 
 - **kNN preservation**: the share of each molecule's 10 exact MinHash neighbours that are
   among its 10 nearest points in 2D.
