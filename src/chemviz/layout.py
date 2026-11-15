@@ -408,6 +408,24 @@ def _coarsen(indptr, nbrs, mass, order):
     return group, gmass[:n_groups].copy(), n_groups
 
 
+def _expand(anchor, group, indptr, nbrs, shift=0.3):
+    """Initial positions of a level's nodes from their groups' positions (``anchor``).
+
+    Each node starts at its group, moved ``shift`` of the way towards the mean position
+    of the groups it links to, so that subtrees start untangled instead of piled up at
+    their group (fewer branches overlapping in the final layout).
+    """
+    n = len(anchor)
+    src = np.repeat(np.arange(n), np.diff(indptr))
+    out = group[nbrs] != group[src]
+    count = np.bincount(src[out], minlength=n)
+    target = np.stack([np.bincount(src[out], anchor[nbrs[out], d], minlength=n) for d in range(2)], axis=1)
+    linked = count > 0
+    pos = anchor.copy()
+    pos[linked] += shift * (target[linked] / count[linked, None] - anchor[linked])
+    return pos
+
+
 def tree_layout(
     n: int,
     edges: np.ndarray,
@@ -456,8 +474,8 @@ def tree_layout(
     for group, lvl_edges, lvl_n in reversed(hierarchy):
         k = np.sqrt(n / lvl_n)
         anchor = pos[group]
-        pos = anchor + rng.normal(scale=0.1 * k, size=(lvl_n, 2))  # place members at their group
         indptr, nbrs = _tree_csr(lvl_n, lvl_edges)
+        pos = _expand(anchor, group, indptr, nbrs) + rng.normal(scale=0.1 * k, size=(lvl_n, 2))
         iters = iters_fine if lvl_n == n else iters_coarse // 3
         pos = _force_iterations(pos, indptr, nbrs, k, iters, 2 * k, gravity, anchor)
 
