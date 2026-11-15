@@ -278,22 +278,33 @@ def _step(pos, force, indptr, nbrs, k, gravity, temp, anchor, new):
         new[v, 1] = pos[v, 1] + fy / f * step
 
 
+@nb.njit(cache=True)
+def _grid_box(pos):
+    """Square box for the grid, trimmed of the most extreme points.
+
+    Outliers (e.g. small components pushed far away by repulsion) would otherwise
+    squeeze the bulk into a few cells. Quantiles are taken on a strided sample.
+    """
+    stride = max(1, pos.shape[0] // 8000)
+    xs, ys = np.sort(pos[::stride, 0]), np.sort(pos[::stride, 1])
+    t = int(0.0005 * len(xs))
+    lo0, lo1 = xs[t], ys[t]
+    span = max(xs[len(xs) - 1 - t] - lo0, ys[len(ys) - 1 - t] - lo1) + 1e-9
+    return lo0, lo1, span
+
+
 @nb.njit(cache=True, parallel=True)
-def _sort_by_cell(pos, g, cell, slot, cell_start, order, spos):
+def _sort_by_cell(pos, g, lo0, lo1, span, cell, slot, cell_start, order, spos):
     """Group particles by finest-grid cell (counting sort), filling the given buffers.
 
-    Gives positions in cell order, the permutation ``order``
-    (sorted index -> original index) and the CSR-style ``cell_start`` offsets.
+    Points outside the grid box go to the border cells. Gives positions in cell order,
+    the permutation ``order`` (sorted index -> original index) and the CSR-style
+    ``cell_start`` offsets.
     """
     n = pos.shape[0]
-    lo0, lo1, hi0, hi1 = pos[0, 0], pos[0, 1], pos[0, 0], pos[0, 1]
-    for i in range(n):
-        lo0, hi0 = min(lo0, pos[i, 0]), max(hi0, pos[i, 0])
-        lo1, hi1 = min(lo1, pos[i, 1]), max(hi1, pos[i, 1])
-    span = max(hi0 - lo0, hi1 - lo1) + 1e-9
     for i in nb.prange(n):
-        a = min(int((pos[i, 0] - lo0) / span * g), g - 1)
-        b = min(int((pos[i, 1] - lo1) / span * g), g - 1)
+        a = min(max(int((pos[i, 0] - lo0) / span * g), 0), g - 1)
+        b = min(max(int((pos[i, 1] - lo1) / span * g), 0), g - 1)
         cell[i] = a * g + b
     cell_start[:] = 0
     for i in range(n):
@@ -328,7 +339,9 @@ def _iterate(pos, indptr, nbrs, k, n_iter, temp0, gravity, anchor, levels, offse
     force = np.empty_like(pos)
     new = np.empty_like(pos)
     for it in range(n_iter):
-        _sort_by_cell(pos, g, cell, slot, cell_start, order, spos)
+        if it % 10 == 0:  # the box moves slowly; points outside it are clamped
+            lo0, lo1, span = _grid_box(pos)
+        _sort_by_cell(pos, g, lo0, lo1, span, cell, slot, cell_start, order, spos)
         _build_pyramid(spos, cell_start, levels, offsets, mass, sx, sy)
         _repulsion(spos, levels, offsets, mass, sx, sy, cell_start, k * k, order, force)
         temp = temp0 * (1 - it / n_iter) + 0.01 * k
