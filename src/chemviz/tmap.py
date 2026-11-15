@@ -35,7 +35,9 @@ def tmap(
     tree and laid out in 2D. Unparsable SMILES are skipped with a warning.
     """
     hashes, frame, smiles, invalid = _encode(data, smiles, n_permutations, radius, n_jobs)
-    hashes, frame = _drop_invalid(hashes, frame, invalid)
+    keep, frame = _drop_invalid(frame, invalid)
+    if keep is not None:
+        hashes = hashes[keep]
     n = len(hashes)
     if n == 1:
         edges = np.empty((0, 2), dtype=np.int64)

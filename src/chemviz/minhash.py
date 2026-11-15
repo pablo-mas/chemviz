@@ -1,4 +1,5 @@
-"""MinHash encodings of molecules (MHFP) and of precomputed binary fingerprints."""
+"""Molecule encodings: MinHash of ECFP substructures (MHFP-like), of precomputed binary
+fingerprints, and folded ECFP fingerprints."""
 
 from collections.abc import Sequence
 
@@ -47,6 +48,55 @@ def _ecfp_features(smiles: Sequence[str], radius: int):
     return indptr, features, invalid
 
 
+def _ecfp_bits(smiles: Sequence[str], radius: int, n_bits: int):
+    """On-bit indices of the folded ECFP (Morgan) fingerprints of a chunk of SMILES as CSR
+    arrays, plus local indices of invalid SMILES."""
+    generator = rdFingerprintGenerator.GetMorganGenerator(radius=radius, fpSize=n_bits)
+    lengths, bits, invalid = [], [], []
+    for i, s in enumerate(smiles):
+        mol = Chem.MolFromSmiles(s)
+        if mol is None:
+            invalid.append(i)
+            lengths.append(0)
+            continue
+        on = generator.GetFingerprint(mol).GetOnBits()
+        bits.extend(on)
+        lengths.append(len(on))
+    indptr = np.zeros(len(smiles) + 1, dtype=np.int64)
+    np.cumsum(lengths, out=indptr[1:])
+    return indptr, np.array(bits, dtype=np.int32), invalid
+
+
+def _map_chunks(func, smiles, chunk_size, n_jobs, *args):
+    """``func(chunk, *args)`` over consecutive chunks of SMILES, in worker processes.
+
+    Yields ``(start, result)`` in order, so results can be consumed as they come.
+    """
+    starts = range(0, len(smiles), chunk_size)
+    chunks = [smiles[i:i + chunk_size] for i in starts]
+    if n_jobs == 1 or len(chunks) <= 1:
+        results = (func(c, *args) for c in chunks)
+    else:
+        # RDKit holds the GIL, so parse in processes. joblib's loky workers neither re-run the
+        # caller's __main__ (unlike spawn) nor fork a process already running numba threads.
+        results = Parallel(n_jobs=-1 if n_jobs is None else n_jobs, return_as="generator")(
+            delayed(func)(c, *args) for c in chunks
+        )
+    return zip(starts, results)
+
+
+def _folded_ecfp(smiles, radius, n_bits, chunk_size=10_000, n_jobs=None):
+    """Folded ECFP fingerprints of all SMILES as CSR on-bit indices ``(indptr, bits)``,
+    plus the indices of invalid SMILES (which get empty rows)."""
+    smiles = list(smiles)
+    indptrs, bits, invalid = [np.zeros(1, dtype=np.int64)], [], []
+    for start, (indptr, chunk_bits, bad) in _map_chunks(_ecfp_bits, smiles, chunk_size, n_jobs, radius, n_bits):
+        indptrs.append(indptr[1:] + indptrs[-1][-1])
+        bits.append(chunk_bits)
+        invalid.extend(start + i for i in bad)
+    return np.concatenate(indptrs), np.concatenate(bits) if bits else np.zeros(0, np.int32), invalid
+
+
 def minhash_ecfp(
     smiles: Sequence[str],
     n_permutations: int = 128,
@@ -78,19 +128,9 @@ def _minhash_ecfp(smiles, n_permutations, radius, seed, chunk_size, n_jobs):
     # a, b < 2**32 keep a * x + b within uint64 for 32-bit feature ids.
     a = rng.integers(1, 1 << 32, n_permutations, dtype=np.uint64)
     b = rng.integers(0, 1 << 32, n_permutations, dtype=np.uint64)
-    starts = range(0, len(smiles), chunk_size)
-    chunks = [smiles[i:i + chunk_size] for i in starts]
-    if n_jobs == 1 or len(chunks) <= 1:
-        results = (_ecfp_features(c, radius) for c in chunks)
-    else:
-        # RDKit holds the GIL, so parse in processes. joblib's loky workers neither re-run the
-        # caller's __main__ (unlike spawn) nor fork a process already running numba threads.
-        results = Parallel(n_jobs=-1 if n_jobs is None else n_jobs, return_as="generator")(
-            delayed(_ecfp_features)(c, radius) for c in chunks
-        )
     out = np.empty((len(smiles), n_permutations), dtype=np.uint32)
     invalid = []
-    for start, (indptr, features, bad) in zip(starts, results):
+    for start, (indptr, features, bad) in _map_chunks(_ecfp_features, smiles, chunk_size, n_jobs, radius):
         out[start:start + len(indptr) - 1] = _minhash_csr(indptr, features, a, b)
         invalid.extend(start + i for i in bad)
     return out, invalid

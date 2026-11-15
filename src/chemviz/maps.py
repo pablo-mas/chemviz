@@ -103,20 +103,16 @@ class Map:
         return ax
 
 
-def _encode(data, smiles, n_permutations, radius, n_jobs):
-    """MinHash vectors, matching DataFrame, its SMILES column (or None) and invalid input positions."""
+def _inputs(data, smiles):
+    """Normalise an input to ``(frame, smiles_column, smiles_values, array)``.
+
+    Either ``smiles_values`` (a list of strings) or ``array`` (a 2D array of MinHash
+    vectors or fingerprints) is set; ``frame`` holds one row per input molecule.
+    """
     if isinstance(data, (str, Path)):
         data, smiles = read_molecules(data, smiles)
     if isinstance(data, np.ndarray) and data.ndim == 2:
-        frame = pd.DataFrame(index=pd.RangeIndex(len(data)))
-        if data.dtype == np.uint32:
-            return data, frame, None, []
-        if data.dtype == bool or (np.issubdtype(data.dtype, np.integer) and np.isin(data, (0, 1)).all()):
-            return minhash_from_fingerprints(data, n_permutations=n_permutations), frame, None, []
-        raise ValueError(
-            "A 2D array must hold uint32 MinHash vectors or binary (0/1) fingerprints; "
-            f"got dtype {data.dtype}"
-        )
+        return pd.DataFrame(index=pd.RangeIndex(len(data))), None, None, data
     if isinstance(data, pd.DataFrame):
         frame = data
         column = smiles or find_smiles_column(data)
@@ -125,22 +121,41 @@ def _encode(data, smiles, n_permutations, radius, n_jobs):
     else:
         column = smiles or "smiles"
         frame = pd.DataFrame({column: list(data)}, index=data.index if isinstance(data, pd.Series) else None)
-    values = frame[column].fillna("").astype(str).tolist()
+    return frame, column, frame[column].fillna("").astype(str).tolist(), None
+
+
+def _is_binary(array):
+    return array.dtype == bool or (np.issubdtype(array.dtype, np.integer) and np.isin(array, (0, 1)).all())
+
+
+def _encode(data, smiles, n_permutations, radius, n_jobs):
+    """MinHash vectors, matching DataFrame, its SMILES column (or None) and invalid input positions."""
+    frame, column, values, array = _inputs(data, smiles)
+    if array is not None:
+        if array.dtype == np.uint32:
+            return array, frame, None, []
+        if _is_binary(array):
+            return minhash_from_fingerprints(array, n_permutations=n_permutations), frame, None, []
+        raise ValueError(
+            "A 2D array must hold uint32 MinHash vectors or binary (0/1) fingerprints; "
+            f"got dtype {array.dtype}"
+        )
     hashes, invalid = _minhash_ecfp(values, n_permutations, radius, 42, 10_000, n_jobs)
     return hashes, frame, column, invalid
 
 
-def _drop_invalid(hashes, frame, invalid):
-    """Warn about and remove the rows of unparsable molecules."""
+def _drop_invalid(frame, invalid):
+    """Warn about unparsable molecules; return the rows to keep (None for all) and the kept frame."""
+    keep = None
     if invalid:
         warnings.warn(
             f"Skipped {len(invalid)} invalid molecule(s) at input positions "
             f"{invalid[:20]}{'...' if len(invalid) > 20 else ''}",
             stacklevel=3,
         )
-        keep = np.ones(len(hashes), dtype=bool)
+        keep = np.ones(len(frame), dtype=bool)
         keep[invalid] = False
-        hashes, frame = hashes[keep], frame[keep]
-    if len(hashes) == 0:
+        frame = frame[keep]
+    if len(frame) == 0:
         raise ValueError("No valid molecules to map")
-    return hashes, frame
+    return keep, frame
