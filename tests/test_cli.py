@@ -41,6 +41,17 @@ def test_several_outputs(mols, tmp_path):
     assert list(coords.columns) == ["smiles", "series", "pki", "x", "y"] and len(coords) == 30
 
 
+@pytest.mark.parametrize(
+    ("method", "extra"),
+    [("tmap", ["-k", "5"]), ("umap", ["-k", "5", "--n-epochs", "50"]), ("tsne", ["--perplexity", "5"]), ("pca", [])],
+)
+def test_every_method(mols, tmp_path, method, extra):
+    out = tmp_path / f"{method}.csv"
+    assert main([method, str(mols), "-o", str(out), *extra]) == 0
+    coords = pd.read_csv(out)
+    assert len(coords) == 30 and coords[["x", "y"]].notna().all().all()
+
+
 def test_invalid_smiles_are_reported(tmp_path, capsys):
     path = tmp_path / "mols.smi"
     path.write_text("\n".join([*SMILES, "not_a_smiles"]), encoding="utf-8")
