@@ -56,4 +56,7 @@ gallery
 how-it-works
 benchmarks
 api
+changelog
+citing
+contributing
 ```

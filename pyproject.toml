@@ -38,6 +38,7 @@ chemviz = "chemviz.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/pablo-mas/chemviz"
+Documentation = "https://chemviz.readthedocs.io"
 Repository = "https://github.com/pablo-mas/chemviz"
 Issues = "https://github.com/pablo-mas/chemviz/issues"
 Changelog = "https://github.com/pablo-mas/chemviz/blob/main/CHANGELOG.md"
