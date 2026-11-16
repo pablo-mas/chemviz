@@ -16,9 +16,10 @@ environment to set up, and it maps millions of molecules on a laptop.
 - **One line**: `cv.tmap("molecules.csv").save("map.html")`.
 - **Four methods, one API**: `cv.tmap`, `cv.umap`, `cv.tsne` and `cv.pca` take the same inputs
   and return the same map object (see [methods](#methods)).
-- **Fast and light**: 250k molecules in ~5 s, 1M in ~20 s, the whole of ChEMBL (2.9M) in
-  under 2 minutes with 4 GB of RAM. That is 2.5–3× faster than the original tmap, with 3–4×
-  less memory (see [benchmarks](#benchmarks)).
+- **Fast and light**: a TMAP of 250k molecules in ~10 s from SMILES, 1M in under 40 s, the
+  whole of ChEMBL (2.9M) in under 2 minutes with ~4 GB of RAM. From the same MinHash vectors,
+  that is 2.5–3× faster than the original tmap, with 3–4× less memory (see
+  [benchmarks](#benchmarks)).
 - **Interactive viewer**: a single self-contained HTML file (WebGL) that shows the structure
   on hover, colours, filters, searches, lasso-selects and exports to CSV. It also works offline.
 - **Static plots** with matplotlib, for papers and reports.
@@ -54,7 +55,7 @@ All methods accept:
 | list, tuple or Series of SMILES | `cv.tmap(["CCO", "c1ccccc1O", ...])` |
 | DataFrame with a SMILES column | `cv.tmap(df)` or `cv.tmap(df, smiles="canonical_smiles")` |
 | file path: `.csv`, `.tsv`, `.smi`, `.sdf` | `cv.tmap("library.sdf")` (SDF properties become columns) |
-| precomputed MinHash (`uint32`) or binary fingerprints | `cv.tmap(fps)` |
+| precomputed MinHash (`uint32`, not for PCA) or binary fingerprints | `cv.tmap(fps)` |
 
 Invalid SMILES are skipped with a warning; their input positions are kept in `m.invalid`.
 
