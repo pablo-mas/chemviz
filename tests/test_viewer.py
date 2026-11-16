@@ -1,6 +1,7 @@
 import base64
 import json
 import re
+import warnings
 import zlib
 
 import numpy as np
@@ -89,8 +90,10 @@ def test_without_smiles_column():
 
 def test_show_returns_iframe(tmap):
     pytest.importorskip("IPython")
-    out = tmap.show(height=400)
-    assert out.data.startswith("<iframe srcdoc=") and "height:400px" in out.data
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # IPython warns about HTML starting with an iframe
+        out = tmap.show(height=400)
+    assert out.data.startswith("<div><iframe srcdoc=") and "height:400px" in out.data
 
 
 def test_build_payload_without_edges():

@@ -206,8 +206,9 @@ class Map:
         import html
 
         doc = html.escape(self.to_html(columns, title, offline), quote=True)
-        return HTML(f'<iframe srcdoc="{doc}" style="width:100%;height:{int(height)}px;border:0" '
-                    'sandbox="allow-scripts allow-downloads"></iframe>')
+        # Wrapped in a div: IPython warns about HTML that starts with an iframe.
+        return HTML(f'<div><iframe srcdoc="{doc}" style="width:100%;height:{int(height)}px;border:0" '
+                    'sandbox="allow-scripts allow-downloads"></iframe></div>')
 
     def widget(self, columns=None, title: str = "chemviz", height: int = 650, offline: bool = False):
         """The interactive viewer as a Jupyter widget, with its selection synced to Python.
