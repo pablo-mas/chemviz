@@ -241,7 +241,7 @@ Map quality, comparing chemviz with tmap:
 |---|---|---|---|---|---|---|---|
 | TMAP | 9 s | 0.320 | 0.03 | 37 s | 2.6 GB | **0.439** | 0.06 |
 | UMAP | 14 s | 0.072 | 0.29 | 58 s | 3.3 GB | 0.187 | 0.15 |
-| t-SNE | 90 s | **0.345** | 0.31 | 382 s | 4.3 GB | 0.408 | 0.25 |
+| t-SNE | 90 s | **0.345** | 0.31 | 386 s | 4.2 GB | 0.408 | 0.25 |
 | PCA | 5 s | 0.002 | **0.44** | 19 s | 1.7 GB | 0.008 | **0.26** |
 
 *Distance correlation* is the Spearman correlation between MinHash distance and 2D distance
