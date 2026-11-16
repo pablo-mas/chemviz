@@ -31,7 +31,7 @@ cv.tmap("molecules.csv").save("map.html")
 - {doc}`getting-started`: install chemviz, make a first map, and choose a method.
 - {doc}`guide`: inputs, the viewer, saving maps, placing new molecules, Jupyter, large
   datasets and the command line.
-- {doc}`gallery`: interactive maps of 50,000 molecules with each method.
+- {doc}`gallery`: interactive maps of 20,000 molecules with each method.
 - {doc}`api`: every function and parameter.
 
 ```{toctree}

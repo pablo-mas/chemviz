@@ -19,7 +19,7 @@ URL = ("https://raw.githubusercontent.com/the-matter-lab/chemical_vae/master/"
        "models/zinc_properties/250k_rndm_zinc_drugs_clean_3.csv")
 DATA = Path(__file__).parent / "_gallery_data"
 MAPS = Path(__file__).parent / "_gallery" / "maps"
-N = 50_000
+N = 20_000  # keeps the build within Read the Docs' time limit (t-SNE dominates)
 TITLES = {"tmap": "TMAP", "umap": "UMAP", "tsne": "t-SNE", "pca": "PCA"}
 
 
@@ -43,13 +43,13 @@ def main():
     warnings.simplefilter("ignore")
     for method, title in TITLES.items():
         print(f"gallery: {method}", file=sys.stderr, flush=True)
-        getattr(cv, method)(df).save(MAPS / f"{method}.html", title=f"{title} of 50,000 ZINC molecules")
-    # Placing the last 5,000 molecules on a tree map of the first 45,000.
+        getattr(cv, method)(df).save(MAPS / f"{method}.html", title=f"{title} of 20,000 ZINC molecules")
+    # Placing the last 2,000 molecules on a tree map of the first 18,000.
     print("gallery: projection", file=sys.stderr, flush=True)
-    ref = cv.tmap(df.iloc[:45_000])
-    both = ref.project(df.iloc[45_000:])
+    ref = cv.tmap(df.iloc[:18_000])
+    both = ref.project(df.iloc[18_000:])
     columns = ["projected", *df.columns]  # first categorical column: the default colouring
-    both.save(MAPS / "projection.html", columns=columns, title="5,000 molecules placed on a TMAP of 45,000")
+    both.save(MAPS / "projection.html", columns=columns, title="2,000 molecules placed on a TMAP of 18,000")
     (DATA / "stamp").write_text(stamp)
 
 

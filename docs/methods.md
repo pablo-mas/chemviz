@@ -21,7 +21,7 @@ Times are end to end from SMILES on a 20-thread desktop (see {doc}`benchmarks`).
 
 ## The four maps of the same molecules
 
-The code below maps the same 20,000 ZINC molecules with each method, coloured by logP. It
+The code below maps the same 5,000 ZINC molecules with each method, coloured by logP. It
 runs every time the documentation is built.
 
 ```{code-cell} python
@@ -32,7 +32,7 @@ import chemviz as cv
 
 url = ("https://raw.githubusercontent.com/the-matter-lab/chemical_vae/master/"
        "models/zinc_properties/250k_rndm_zinc_drugs_clean_3.csv")
-df = pd.read_csv(url).sample(20_000, random_state=0)
+df = pd.read_csv(url).sample(5_000, random_state=0)
 df["smiles"] = df["smiles"].str.strip()
 
 maps = {method: getattr(cv, method)(df) for method in ("tmap", "umap", "tsne", "pca")}

@@ -71,10 +71,11 @@ html_context = {
 }
 
 
-def _make_gallery(app):
+def _make_gallery(app, config):
     """Generate the gallery's interactive maps (cached until the script or chemviz changes)."""
     subprocess.run([sys.executable, str(Path(__file__).parent / "make_gallery.py")], check=True)
 
 
 def setup(app):
-    app.connect("builder-inited", _make_gallery)
+    # Before Sphinx checks that html_extra_path exists (priority 800), so a fresh build works.
+    app.connect("config-inited", _make_gallery, priority=100)
