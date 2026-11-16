@@ -8,7 +8,7 @@ gains and Barnes-Hut repulsion on an adaptive quadtree.
 import numba as nb
 import numpy as np
 
-from chemviz.graph import minimum_spanning_forest
+from chemviz.graph import _symmetrize, minimum_spanning_forest
 from chemviz.layout import _threads_for, tree_layout
 from chemviz.lsh import lsh_knn
 from chemviz.maps import Map, _drop_invalid, _encode
@@ -57,20 +57,10 @@ def _conditional_p(dist, perplexity, n_iter=200):
 
 def _affinities(idx, dist, perplexity):
     """Symmetric joint probabilities P = (P_cond + P_cond^T) / sum, as CSR ``(indptr, nbrs, p)``."""
-    n, k = idx.shape
     cond = _conditional_p(dist.astype(np.float64), float(perplexity))
-    src = np.repeat(np.arange(n), k)
-    dst = idx.ravel()
-    ok = dst >= 0
-    src, dst, p = src[ok], dst[ok], cond.ravel()[ok]
-    s, t = np.concatenate([src, dst]), np.concatenate([dst, src])
-    keys, inverse = np.unique(s * n + t, return_inverse=True)
-    p = np.bincount(inverse, np.concatenate([p, p]), minlength=len(keys))
+    indptr, nbrs, p = _symmetrize(idx, cond, False)
     p /= p.sum()
-    s, t = keys // n, keys % n  # keys are sorted, so rows are contiguous
-    indptr = np.zeros(n + 1, dtype=np.int64)
-    np.cumsum(np.bincount(s, minlength=n), out=indptr[1:])
-    return indptr, t.astype(np.int64), p
+    return indptr, nbrs, p
 
 
 _DEPTH = 16  # quadtree depth limit: Morton codes hold 16 bits per axis

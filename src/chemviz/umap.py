@@ -9,7 +9,7 @@ results are deterministic for a given seed whatever the number of threads.
 import numba as nb
 import numpy as np
 
-from chemviz.graph import minimum_spanning_forest
+from chemviz.graph import _symmetrize, minimum_spanning_forest
 from chemviz.layout import _threads_for, tree_layout
 from chemviz.lsh import lsh_knn
 from chemviz.maps import Map, _drop_invalid, _encode
@@ -64,26 +64,12 @@ def _fuzzy_graph(idx, dist, n_epochs):
     Directed memberships exp(-(d - rho_i) / sigma_i) are combined by fuzzy union
     (a + b - ab); edges too weak to be sampled during ``n_epochs`` are dropped.
     """
-    n, k = idx.shape
     rho, sigma = _smooth_knn(dist.astype(np.float64))
-    src = np.repeat(np.arange(n), k)
-    dst = idx.ravel()
-    ok = dst >= 0
-    src, dst = src[ok], dst[ok]
-    w = np.exp(-np.maximum(dist.ravel()[ok] - rho[src], 0.0) / sigma[src])
-    lo, hi = np.minimum(src, dst), np.maximum(src, dst)
-    pairs, inverse = np.unique(lo * n + hi, return_inverse=True)
-    forward = src < dst  # membership seen from the lower index (a) or the higher one (b)
-    a = np.bincount(inverse[forward], w[forward], minlength=len(pairs))
-    b = np.bincount(inverse[~forward], w[~forward], minlength=len(pairs))
-    weight = a + b - a * b
-    keep = weight >= weight.max() / n_epochs
-    u, v, weight = pairs[keep] // n, pairs[keep] % n, weight[keep]
-    s, t = np.concatenate([u, v]), np.concatenate([v, u])
-    order = np.argsort(s, kind="stable")
-    indptr = np.zeros(n + 1, dtype=np.int64)
-    np.cumsum(np.bincount(s, minlength=n), out=indptr[1:])
-    return indptr, t[order].astype(np.int64), np.concatenate([weight, weight])[order]
+    w = np.exp(-np.maximum(dist - rho[:, None], 0.0) / sigma[:, None])
+    indptr, nbrs, weight = _symmetrize(idx, w, True)
+    keep = weight >= weight.max(initial=0.0) / n_epochs
+    kept_before = np.concatenate([[0], np.cumsum(keep)])
+    return kept_before[indptr], nbrs[keep], weight[keep]
 
 
 def _curve_params(spread, min_dist):

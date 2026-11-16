@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components, minimum_spanning_tree
 
@@ -49,3 +50,26 @@ def test_missing_neighbours_are_ignored():
     edges, weights = minimum_spanning_forest(indices, distances)
     assert edges.tolist() == [[0, 1]]
     assert weights.tolist() == [np.float32(0.2)]
+
+
+@pytest.mark.parametrize("union", [False, True])
+def test_symmetrize_matches_dense(union):
+    from chemviz.graph import _symmetrize
+
+    rng = np.random.default_rng(0)
+    n, k = 30, 5
+    idx = np.array([rng.choice(np.delete(np.arange(n), i), k, replace=False) for i in range(n)])
+    idx[0, 0] = -1  # a missing neighbour
+    w = rng.random((n, k))
+    dense = np.zeros((n, n))
+    for i in range(n):
+        for c in range(k):
+            if idx[i, c] >= 0:
+                dense[i, idx[i, c]] = w[i, c]
+    expected = dense + dense.T - dense * dense.T if union else dense + dense.T
+    indptr, nbrs, weights = _symmetrize(idx, w, union)
+    got = np.zeros((n, n))
+    rows = np.repeat(np.arange(n), np.diff(indptr))
+    got[rows, nbrs] = weights
+    np.testing.assert_allclose(got, expected)
+    assert all((np.diff(nbrs[indptr[i]:indptr[i + 1]]) > 0).all() for i in range(n))

@@ -51,3 +51,84 @@ def minimum_spanning_forest(
     src, dst, w = src[order], dst[order], w[order]
     kept = _kruskal(n, src, dst)
     return np.stack([src[kept], dst[kept]], axis=1), w[kept].astype(np.float32)
+
+
+@nb.njit(cache=True)
+def _row_entries(idx, w, in_ptr, in_src, in_w, i):
+    """Sorted outgoing and incoming neighbours of row ``i`` with their weights."""
+    k = idx.shape[1]
+    out_j = np.empty(k, dtype=np.int64)
+    out_w = np.empty(k)
+    m = 0
+    for c in range(k):
+        j = idx[i, c]
+        if j >= 0 and j != i:
+            out_j[m], out_w[m] = j, w[i, c]
+            m += 1
+    order = np.argsort(out_j[:m])
+    lo, hi = in_ptr[i], in_ptr[i + 1]
+    in_order = np.argsort(in_src[lo:hi])
+    return out_j[:m][order], out_w[:m][order], in_src[lo:hi][in_order], in_w[lo:hi][in_order]
+
+
+@nb.njit(cache=True, parallel=True)
+def _symmetrize(idx, w, union):
+    """Symmetric CSR graph ``(indptr, nbrs, weights)`` from directed kNN weights.
+
+    Each pair gets a = w(i -> j) and b = w(j -> i) (0 if absent), combined as a + b, or
+    by fuzzy union a + b - ab if ``union``. Rows are merged in parallel without forming
+    all (i, j) pairs at once, so memory stays proportional to the output.
+    """
+    n, k = idx.shape
+    in_ptr = np.zeros(n + 1, dtype=np.int64)
+    for i in range(n):
+        for c in range(k):
+            j = idx[i, c]
+            if j >= 0 and j != i:
+                in_ptr[j + 1] += 1
+    for i in range(n):
+        in_ptr[i + 1] += in_ptr[i]
+    in_src = np.empty(in_ptr[n], dtype=np.int32)
+    in_w = np.empty(in_ptr[n])
+    fill = in_ptr[:-1].copy()
+    for i in range(n):
+        for c in range(k):
+            j = idx[i, c]
+            if j >= 0 and j != i:
+                in_src[fill[j]], in_w[fill[j]] = i, w[i, c]
+                fill[j] += 1
+    counts = np.zeros(n + 1, dtype=np.int64)
+    for i in nb.prange(n):  # pass 1: distinct neighbours per row
+        out_j, _, in_j, _ = _row_entries(idx, w, in_ptr, in_src, in_w, i)
+        a, b, m = 0, 0, 0
+        while a < len(out_j) or b < len(in_j):
+            if b == len(in_j) or (a < len(out_j) and out_j[a] < in_j[b]):
+                a += 1
+            elif a == len(out_j) or in_j[b] < out_j[a]:
+                b += 1
+            else:
+                a += 1
+                b += 1
+            m += 1
+        counts[i + 1] = m
+    indptr = np.cumsum(counts)
+    nbrs = np.empty(indptr[n], dtype=np.int32)
+    weights = np.empty(indptr[n])
+    for i in nb.prange(n):  # pass 2: merged entries
+        out_j, out_w, in_j, in_wi = _row_entries(idx, w, in_ptr, in_src, in_w, i)
+        a, b, p = 0, 0, indptr[i]
+        while a < len(out_j) or b < len(in_j):
+            if b == len(in_j) or (a < len(out_j) and out_j[a] < in_j[b]):
+                j, x, y = out_j[a], out_w[a], 0.0
+                a += 1
+            elif a == len(out_j) or in_j[b] < out_j[a]:
+                j, x, y = in_j[b], 0.0, in_wi[b]
+                b += 1
+            else:
+                j, x, y = out_j[a], out_w[a], in_wi[b]
+                a += 1
+                b += 1
+            nbrs[p] = j
+            weights[p] = x + y - x * y if union else x + y
+            p += 1
+    return indptr, nbrs, weights
