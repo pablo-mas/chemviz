@@ -15,3 +15,7 @@ prototypes/out/
 .venv-tmap/
 benchmarks/out/
 .venv-ref/
+
+# Documentation builds
+docs/_build/
+docs/jupyter_execute/
