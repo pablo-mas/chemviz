@@ -1,7 +1,7 @@
 [project]
 name = "chemviz"
 version = "0.1.0"
-description = "Fast, easy-to-install chemical space visualization (TMAP and more)"
+description = "Fast, easy-to-install chemical space visualization: TMAP, UMAP, t-SNE and PCA"
 license = "MIT"
 license-files = ["LICENSE"]
 readme = "README.md"
@@ -9,7 +9,7 @@ authors = [
     { name = "Pablo Mas", email = "pablovn.mas@gmail.com" }
 ]
 requires-python = ">=3.12"
-keywords = ["cheminformatics", "chemical space", "tmap", "visualization", "minhash", "lsh", "rdkit", "webgl"]
+keywords = ["cheminformatics", "chemical space", "tmap", "umap", "tsne", "pca", "visualization", "minhash", "lsh", "rdkit", "webgl"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
