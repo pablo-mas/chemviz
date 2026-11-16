@@ -54,7 +54,7 @@ def minimum_spanning_forest(
 
 
 @nb.njit(cache=True)
-def _row_entries(idx, w, in_ptr, in_src, in_w, i):
+def _row_entries(idx, w, in_ptr, in_src, in_col, i):
     """Sorted outgoing and incoming neighbours of row ``i`` with their weights."""
     k = idx.shape[1]
     out_j = np.empty(k, dtype=np.int64)
@@ -68,7 +68,11 @@ def _row_entries(idx, w, in_ptr, in_src, in_w, i):
     order = np.argsort(out_j[:m])
     lo, hi = in_ptr[i], in_ptr[i + 1]
     in_order = np.argsort(in_src[lo:hi])
-    return out_j[:m][order], out_w[:m][order], in_src[lo:hi][in_order], in_w[lo:hi][in_order]
+    in_j = in_src[lo:hi][in_order]
+    in_w = np.empty(hi - lo)
+    for t in range(hi - lo):  # weight of the edge in_j[t] -> i, read from its kNN row
+        in_w[t] = w[in_j[t], in_col[lo + in_order[t]]]
+    return out_j[:m][order], out_w[:m][order], in_j, in_w
 
 
 @nb.njit(cache=True, parallel=True)
@@ -76,8 +80,9 @@ def _symmetrize(idx, w, union):
     """Symmetric CSR graph ``(indptr, nbrs, weights)`` from directed kNN weights.
 
     Each pair gets a = w(i -> j) and b = w(j -> i) (0 if absent), combined as a + b, or
-    by fuzzy union a + b - ab if ``union``. Rows are merged in parallel without forming
-    all (i, j) pairs at once, so memory stays proportional to the output.
+    by fuzzy union a + b - ab if ``union``; weights keep the dtype of ``w``. Rows are merged
+    in parallel without forming all (i, j) pairs at once, so memory stays proportional to
+    the output. At most 65,535 neighbours per row.
     """
     n, k = idx.shape
     in_ptr = np.zeros(n + 1, dtype=np.int64)
@@ -89,17 +94,17 @@ def _symmetrize(idx, w, union):
     for i in range(n):
         in_ptr[i + 1] += in_ptr[i]
     in_src = np.empty(in_ptr[n], dtype=np.int32)
-    in_w = np.empty(in_ptr[n])
+    in_col = np.empty(in_ptr[n], dtype=np.uint16)  # column of the edge in its source's kNN row
     fill = in_ptr[:-1].copy()
     for i in range(n):
         for c in range(k):
             j = idx[i, c]
             if j >= 0 and j != i:
-                in_src[fill[j]], in_w[fill[j]] = i, w[i, c]
+                in_src[fill[j]], in_col[fill[j]] = i, c
                 fill[j] += 1
     counts = np.zeros(n + 1, dtype=np.int64)
     for i in nb.prange(n):  # pass 1: distinct neighbours per row
-        out_j, _, in_j, _ = _row_entries(idx, w, in_ptr, in_src, in_w, i)
+        out_j, _, in_j, _ = _row_entries(idx, w, in_ptr, in_src, in_col, i)
         a, b, m = 0, 0, 0
         while a < len(out_j) or b < len(in_j):
             if b == len(in_j) or (a < len(out_j) and out_j[a] < in_j[b]):
@@ -113,9 +118,9 @@ def _symmetrize(idx, w, union):
         counts[i + 1] = m
     indptr = np.cumsum(counts)
     nbrs = np.empty(indptr[n], dtype=np.int32)
-    weights = np.empty(indptr[n])
+    weights = np.empty(indptr[n], dtype=w.dtype)
     for i in nb.prange(n):  # pass 2: merged entries
-        out_j, out_w, in_j, in_wi = _row_entries(idx, w, in_ptr, in_src, in_w, i)
+        out_j, out_w, in_j, in_wi = _row_entries(idx, w, in_ptr, in_src, in_col, i)
         a, b, p = 0, 0, indptr[i]
         while a < len(out_j) or b < len(in_j):
             if b == len(in_j) or (a < len(out_j) and out_j[a] < in_j[b]):

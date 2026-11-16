@@ -42,22 +42,26 @@ def _conditional_p(dist, perplexity, n_iter=200):
     """Gaussian conditional probabilities over each row's neighbours (squared distances),
     with the bandwidth set so that their perplexity is ``perplexity``."""
     n, k = dist.shape
-    out = np.zeros((n, k))
+    out = np.zeros((n, k), dtype=np.float32)  # enough for probabilities only summed in gradients
     target = np.log(perplexity)
     for i in nb.prange(n):
         d2 = np.empty(k)
+        row = np.zeros(k)
         dmin = np.inf
         for j in range(k):
-            d2[j] = dist[i, j] * dist[i, j] if np.isfinite(dist[i, j]) else np.inf
+            d = np.float64(dist[i, j])
+            d2[j] = d * d if np.isfinite(d) else np.inf
             dmin = min(dmin, d2[j])
         if np.isfinite(dmin):  # rows without neighbours stay zero
-            _bisect_row(d2, dmin, target, n_iter, out[i])
+            _bisect_row(d2, dmin, target, n_iter, row)
+            for j in range(k):
+                out[i, j] = row[j]
     return out
 
 
 def _affinities(idx, dist, perplexity):
     """Symmetric joint probabilities P = (P_cond + P_cond^T) / sum, as CSR ``(indptr, nbrs, p)``."""
-    cond = _conditional_p(dist.astype(np.float64), float(perplexity))
+    cond = _conditional_p(dist, float(perplexity))
     indptr, nbrs, p = _symmetrize(idx, cond, False)
     p /= p.sum()
     return indptr, nbrs, p
@@ -278,18 +282,20 @@ def tsne_layout(
     ``idx`` and ``dist`` are ``(n, k)`` neighbour indices (-1 for missing) and distances.
     The optimisation follows openTSNE's defaults: ``early_exaggeration_iter`` iterations
     with exaggerated attraction, then ``n_iter`` normal ones, learning rate
-    n / exaggeration and momentum 0.8. ``init`` defaults to the tree layout of the graph's
-    minimum spanning forest (rescaled to a standard deviation of 1e-4).
+    n / exaggeration and momentum 0.8. ``init`` defaults to the tree layout of the minimum
+    spanning forest of the 30 nearest neighbours (rescaled to a standard deviation of 1e-4).
 
     Returns an ``(n, 2)`` float32 array. Results are deterministic for a given ``seed``.
     """
     idx = np.asarray(idx, dtype=np.int64)
-    dist = np.asarray(dist, dtype=np.float64)
+    dist = np.asarray(dist)
     n, k = idx.shape
     perplexity = min(perplexity, max(k / 3, 1.0))
     if init is None:
         # A full tree layout gives a better global structure than a quick one or a random start.
-        init = tree_layout(n, minimum_spanning_forest(idx, dist)[0], seed=seed)
+        # Its tree spans the 30 nearest neighbours: a better global structure than 10 or 15,
+        # and as good as all 90 for a third of the memory.
+        init = tree_layout(n, minimum_spanning_forest(idx[:, :30], dist[:, :30])[0], seed=seed)
     pos = np.array(init, dtype=np.float64)
     pos -= pos.mean(axis=0)
     pos *= 1e-4 / (pos[:, 0].std() or 1.0)
@@ -333,6 +339,7 @@ def tsne(
         pos[:, 0] = np.arange(n)
     else:
         idx, dist = lsh_knn(hashes, k=min(int(3 * perplexity), n - 1), n_trees=n_trees, kc=kc)
+        del hashes  # free memory for the affinities
         pos = tsne_layout(idx, dist, perplexity=perplexity, n_iter=n_iter, seed=seed)
     edges = np.empty((0, 2), dtype=np.int64)
     return Map(pos[:, 0], pos[:, 1], edges, frame, np.asarray(invalid, dtype=np.int64), smiles, "tsne")

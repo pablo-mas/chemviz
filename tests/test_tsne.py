@@ -17,7 +17,7 @@ LABELS = np.repeat(np.arange(3), 15)
 def test_conditional_p_has_the_requested_perplexity():
     dist = np.sort(np.random.default_rng(0).random((40, 30)), axis=1)
     p = _conditional_p(dist, 5.0)
-    np.testing.assert_allclose(p.sum(axis=1), 1.0)
+    np.testing.assert_allclose(p.sum(axis=1), 1.0, rtol=1e-6)  # stored as float32
     entropy = -(p * np.log(np.where(p > 0, p, 1))).sum(axis=1)
     np.testing.assert_allclose(np.exp(entropy), 5.0, rtol=1e-4)
 
