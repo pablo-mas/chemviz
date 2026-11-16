@@ -70,12 +70,12 @@ m.to_dataframe()  # data + x, y columns
 
 ## Methods
 
-| Method | What the map shows | ZINC250k |
-|---|---|---|
-| `cv.tmap` | A tree linking each molecule to a close neighbour: series and their branching are easy to follow, and nearest neighbours stay together. | 9 s |
-| `cv.umap` | Tight, well separated clusters; distances between clusters mean little. | 14 s |
-| `cv.tsne` | Clusters with fine local detail, the best preserved neighbourhoods; distances between clusters mean little. | 97 s |
-| `cv.pca` | A linear projection of fingerprints: broad trends and gradients, but similar molecules overlap. | 5 s |
+| Method | What the map shows | ZINC250k | ChEMBL 1M |
+|---|---|---|---|
+| `cv.tmap` | A tree linking each molecule to a close neighbour: series and their branching are easy to follow, and nearest neighbours stay together. | 9 s | 37 s |
+| `cv.umap` | Tight, well separated clusters; distances between clusters mean little. | 14 s | 58 s |
+| `cv.tsne` | Clusters with fine local detail, well preserved neighbourhoods; distances between clusters mean little. | 97 s | 6.5 min |
+| `cv.pca` | A linear projection of fingerprints: broad trends and gradients, but similar molecules overlap. | 5 s | 19 s |
 
 Times are end to end from SMILES (see [benchmarks](#benchmarks)). TMAP, UMAP and t-SNE use
 the same MinHash encoding and LSH Forest nearest neighbours; PCA uses folded ECFP
@@ -225,14 +225,14 @@ Map quality, comparing chemviz with tmap:
 - **Global structure**: the Spearman correlation between distance along the tree and distance
   in 2D.
 
-**Other methods.** On ZINC250k, end to end from SMILES:
+**Other methods.** End to end from SMILES (peak memory of the whole process on ChEMBL 1M):
 
-| Method | Time | kNN preservation | Distance correlation |
-|---|---|---|---|
-| TMAP | 9 s | 0.320 | 0.03 |
-| UMAP | 14 s | 0.072 | 0.29 |
-| t-SNE | 97 s | **0.341** | 0.30 |
-| PCA | 5 s | 0.002 | **0.44** |
+| Method | ZINC250k: time | kNN preservation | Distance correlation | ChEMBL 1M: time | memory | kNN preservation | Distance correlation |
+|---|---|---|---|---|---|---|---|
+| TMAP | 9 s | 0.320 | 0.03 | 37 s | 2.6 GB | **0.439** | 0.06 |
+| UMAP | 14 s | 0.072 | 0.29 | 58 s | 3.3 GB | 0.187 | 0.15 |
+| t-SNE | 97 s | **0.341** | 0.30 | 390 s | 8.4 GB | 0.403 | 0.24 |
+| PCA | 5 s | 0.002 | **0.44** | 19 s | 1.7 GB | 0.008 | **0.26** |
 
 *Distance correlation* is the Spearman correlation between MinHash distance and 2D distance
 over random pairs. Each method trades local neighbourhoods against overall distances
