@@ -11,14 +11,15 @@ import numpy as np
 
 from chemviz.graph import _symmetrize, minimum_spanning_forest
 from chemviz.layout import _threads_for, tree_layout
-from chemviz.lsh import lsh_knn
+from chemviz.lsh import _lsh_query, lsh_knn
 from chemviz.maps import Map, _drop_invalid, _encode
 
 
 @nb.njit(cache=True, parallel=True)
-def _smooth_knn(dist, n_iter=64):
-    """Per-point ``rho`` (distance to the nearest non-identical neighbour) and ``sigma``
-    such that sum(exp(-(d - rho) / sigma)) = log2(k + 1) over the k neighbours."""
+def _smooth_knn(dist, n_iter=64, use_rho=True):
+    """Per-point ``rho`` (distance to the nearest non-identical neighbour, or 0 without
+    ``use_rho``) and ``sigma`` such that sum(exp(-(d - rho) / sigma)) = log2(k + 1) over
+    the k neighbours."""
     n, k = dist.shape
     target = np.log2(k + 1)
     rho = np.zeros(n)
@@ -37,7 +38,7 @@ def _smooth_knn(dist, n_iter=64):
             if np.isfinite(d):
                 mean_i += d
                 cnt += 1
-                if d > 0.0 and rho[i] == 0.0:
+                if use_rho and d > 0.0 and rho[i] == 0.0:
                     rho[i] = d
         lo, hi, mid = 0.0, np.inf, 1.0
         for _ in range(n_iter):
@@ -191,6 +192,63 @@ def umap_layout(
             _epoch(pos, new, indptr, nbrs, eps, next_sample, eps_neg, next_neg, a, b,
                    1.0 - epoch / n_epochs, epoch, seed)
             pos, new = new, pos
+    return pos.astype(np.float32)
+
+
+@nb.njit(cache=True, parallel=True)
+def _transform_epochs(pos, ref_pos, idx, eps, n_epochs, a, b, negative_sample_rate, seed):
+    """umap-learn's transform optimisation: each new point moves towards its reference
+    neighbours and away from random reference points, which stay fixed."""
+    m, k = idx.shape
+    n_ref = ref_pos.shape[0]
+    for i in nb.prange(m):
+        next_sample = eps[i].copy()
+        eps_neg = eps[i] / negative_sample_rate
+        next_neg = eps_neg.copy()
+        for epoch in range(n_epochs):
+            alpha = 0.25 * (1.0 - epoch / n_epochs)  # umap-learn: a quarter of the fit's rate
+            for c in range(k):
+                if not np.isfinite(eps[i, c]) or next_sample[c] > epoch:
+                    continue
+                j = idx[i, c]
+                dx, dy = pos[i, 0] - ref_pos[j, 0], pos[i, 1] - ref_pos[j, 1]
+                d2 = dx * dx + dy * dy
+                if d2 > 0.0:
+                    coeff = -2.0 * a * b * d2 ** (b - 1.0) / (a * d2**b + 1.0)
+                    pos[i, 0] += alpha * _clip(coeff * dx)
+                    pos[i, 1] += alpha * _clip(coeff * dy)
+                next_sample[c] += eps[i, c]
+                n_neg = int((epoch - next_neg[c]) / eps_neg[c])
+                for s in range(n_neg):
+                    r = _rand_index(seed, epoch, i * k + c, s, n_ref)
+                    dx, dy = pos[i, 0] - ref_pos[r, 0], pos[i, 1] - ref_pos[r, 1]
+                    d2 = dx * dx + dy * dy
+                    if d2 > 0.0:
+                        coeff = 2.0 * b / ((0.001 + d2) * (a * d2**b + 1.0))
+                        pos[i, 0] += alpha * _clip(coeff * dx)
+                        pos[i, 1] += alpha * _clip(coeff * dy)
+                next_neg[c] += n_neg * eps_neg[c]
+
+
+def _transform(ref_pos, ref_hashes, hashes, model):
+    """Positions of new molecules on a UMAP map, as umap-learn's ``transform``."""
+    m, n_ref = len(hashes), len(ref_hashes)
+    idx, dist = _lsh_query(ref_hashes, hashes, min(model["k"], n_ref), model["n_trees"], model["kc"])
+    rho, sigma = _smooth_knn(np.where(idx >= 0, dist, np.inf).astype(np.float64), use_rho=False)
+    w = np.where(idx >= 0, np.exp(-np.maximum(dist - rho[:, None], 0.0) / sigma[:, None]), 0.0)
+    # Start at the membership-weighted mean of the neighbours (on an identical one if any).
+    safe = np.maximum(idx, 0)
+    pos = (w[:, :, None] * ref_pos[safe]).sum(axis=1) / w.sum(axis=1, keepdims=True)
+    exact = (dist == 0) & (idx >= 0)
+    has_exact = exact.any(axis=1)
+    pos[has_exact] = ref_pos[safe[has_exact, exact[has_exact].argmax(axis=1)]]
+    n_epochs = model["n_epochs"] // 3 if model["n_epochs"] else (100 if m <= 10_000 else 30)
+    w[w < w.max() / n_epochs] = 0.0
+    with np.errstate(divide="ignore"):
+        eps = np.where(w > 0, w.max() / w, np.inf)
+    a, b = _curve_params(1.0, model["min_dist"])
+    pos = np.ascontiguousarray(pos, dtype=np.float64)
+    _transform_epochs(pos, ref_pos.astype(np.float64), safe, eps, n_epochs, a, b, 5, model["seed"])
     return pos.astype(np.float32)
 
 

@@ -36,6 +36,28 @@ class Map:
         """The input rows with ``x`` and ``y`` columns added."""
         return self.data.assign(x=self.x, y=self.y)
 
+    def project(self, data, smiles: str | None = None, *, n_jobs: int | None = None) -> "Map":
+        """Place new molecules on this map, without moving the molecules already on it.
+
+        ``data`` is given as for the method that made the map (SMILES, DataFrame, file or
+        array, encoded the same way). Returns a new map holding this map's molecules then
+        the new ones, with a ``projected`` column (True for the new molecules) to colour
+        or filter them; it can itself receive more molecules. Unparsable SMILES are
+        skipped with a warning.
+
+        Each method places molecules as its reference implementation does:
+
+        - ``tmap``: each group of related new molecules forms a branch grafted onto its
+          closest molecule of the map, in the widest free direction;
+        - ``umap``: as umap-learn's ``transform``, from the weighted mean of the nearest
+          neighbours on the map;
+        - ``tsne``: as openTSNE's ``transform``, from the median of the nearest neighbours;
+        - ``pca``: exact projection on the map's principal axes.
+        """
+        from chemviz._project import project
+
+        return project(self, data, smiles, n_jobs)
+
     def to_html(self, columns=None, title: str = "chemviz", offline: bool = False) -> str:
         """The interactive WebGL viewer as a self-contained HTML page.
 

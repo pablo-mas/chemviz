@@ -129,7 +129,11 @@ def load(path) -> Map:
 
     Files are read without pickle, so loading a file from someone else cannot run code.
     """
-    with zipfile.ZipFile(path) as zf:
+    try:
+        zf = zipfile.ZipFile(path)
+    except zipfile.BadZipFile:
+        raise ValueError(f"{path} is not a chemviz map file") from None
+    with zf:
         try:
             header = json.loads(zf.read("header.json"))
         except KeyError:

@@ -23,6 +23,8 @@ environment to set up, and it maps millions of molecules on a laptop.
 - **Interactive viewer**: a single self-contained HTML file (WebGL) that shows the structure
   on hover, colours, filters, searches, lasso-selects and exports to CSV. It also works offline.
 - **Static plots** with matplotlib, for papers and reports.
+- **New molecules on an existing map**: `ref.project("hits.csv")` places them in seconds,
+  without moving the map (see [placing new molecules](#placing-new-molecules-on-a-map)).
 - **Command line**: `chemviz tmap molecules.csv -o map.html` (or `umap`, `tsne`, `pca`).
 
 ## Installation
@@ -81,6 +83,30 @@ MinHash vectors (512 bytes per molecule; `m.save("map.chemviz", model=False)` le
 for a smaller file). It is read without pickle, so opening a file from someone else cannot
 run code.
 
+## Placing new molecules on a map
+
+Place screening hits, a new series or generated molecules on an existing map, without
+recomputing it or moving the molecules already on it:
+
+```python
+ref = cv.tmap("chembl.csv")          # or cv.load("chembl.chemviz")
+m = ref.project("hits.csv")          # same kinds of input as the methods
+m.save("hits.html")                  # colour by "projected" to see where they fall
+```
+
+The result holds the map's molecules then the new ones, with a `projected` column (True for
+the new molecules); it can receive more molecules in turn. Each method places them as its
+reference implementation does:
+
+- **TMAP**: the new molecules and the map's tree form a minimum spanning tree, so each group
+  of related new molecules becomes a branch grafted onto its closest molecule on the map.
+- **UMAP**: as umap-learn's `transform`, from the weighted mean of the nearest neighbours.
+- **t-SNE**: as openTSNE's `transform`, from the median of the nearest neighbours.
+- **PCA**: exact projection on the map's principal axes.
+
+Placing 1,000 molecules on a map of 1M takes 2 seconds with TMAP or UMAP, 9 with t-SNE
+(see [benchmarks](#benchmarks)).
+
 ## Methods
 
 | Method | What the map shows | ZINC250k | ChEMBL 1M |
@@ -102,7 +128,14 @@ chemviz umap molecules.csv -o map.html -o map.png --color pKi
 chemviz pca library.sdf -o coords.csv           # data + x, y coordinates
 ```
 
-The subcommands are `tmap`, `umap`, `tsne` and `pca`. Each `-o` output is written according
+To place new molecules on a saved map:
+
+```bash
+chemviz tmap library.csv -o library.chemviz
+chemviz project library.chemviz hits.csv -o hits.html
+```
+
+The subcommands are `tmap`, `umap`, `tsne`, `pca` and `project`. Each `-o` output is written according
 to its extension: `.html` (interactive viewer), `.png` / `.svg` / `.pdf` (static plot),
 `.csv` or `.chemviz` (the map, for `cv.load`). Options mirror the Python API (`--smiles`, `--columns`, `--offline`, `-k`, `--seed`…);
 see `chemviz tmap --help`.
@@ -274,8 +307,23 @@ kNN graph:
 umap-learn and openTSNE ran with their defaults on the graphs chemviz uses: 15 neighbours for
 UMAP, and 90 neighbours with perplexity 30 for t-SNE.
 
+**Placing new molecules.** Maps of a random 90% of ZINC250k (224,510 molecules), on which
+the other 24,945 were then projected, compared with maps of all molecules. kNN preservation
+is measured on 2000 of the projected molecules; that of the reference molecules barely
+changes.
+
+| Method | kNN preservation, full map | kNN preservation, projected | Time to project 24,945 | Time to project 1,000 onto 1M |
+|---|---|---|---|---|
+| TMAP | 0.317 | 0.256 | 2.4 s | 2.0 s |
+| UMAP | 0.073 | 0.049 | 1.6 s | 1.7 s |
+| t-SNE | 0.338 | 0.243 | 3.8 s | 9.2 s |
+| PCA | 0.003 | 0.003 | 1.1 s | 0.2 s |
+
+Projected molecules keep two thirds (UMAP) to four fifths (TMAP) of the neighbourhood quality
+they get in a map recomputed with them, since the map does not rearrange around them.
+
 Scripts are in [`benchmarks/`](https://github.com/pablo-mas/chemviz/tree/main/benchmarks)
-(`compare_tmap.py`, `compare_methods.py`).
+(`compare_tmap.py`, `compare_methods.py`, `compare_projection.py`).
 
 ## Credits
 

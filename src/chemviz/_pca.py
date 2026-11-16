@@ -81,6 +81,42 @@ def pca_layout(fingerprints: np.ndarray) -> np.ndarray:
     return _pca_csr(indptr, bits, fingerprints.shape[1])[0].astype(np.float32)
 
 
+def _encode_bits(data, smiles, n_bits, radius, n_jobs):
+    """Fingerprints of the valid molecules as CSR on-bits ``(indptr, bits)``, with the
+    fingerprint size, matching DataFrame, SMILES column, invalid input positions and the
+    kind of input ("ecfp" or "fingerprints")."""
+    frame, column, values, array = _inputs(data, smiles)
+    if array is not None:
+        if not _is_binary(array):
+            raise ValueError("pca needs SMILES or binary (0/1) fingerprints; MinHash vectors have no linear structure")
+        indptr, bits = _dense_to_csr(array)
+        n_bits, invalid, encoding = array.shape[1], [], "fingerprints"
+    else:
+        indptr, bits, invalid = _folded_ecfp(values, radius, n_bits, n_jobs=n_jobs)
+        encoding = "ecfp"
+    keep, frame = _drop_invalid(frame, invalid)
+    if keep is not None:  # invalid molecules have empty rows: drop them from the CSR offsets
+        lengths = np.diff(indptr)[keep]
+        indptr = np.zeros(len(lengths) + 1, dtype=np.int64)
+        np.cumsum(lengths, out=indptr[1:])
+    return indptr, bits, n_bits, frame, column, invalid, encoding
+
+
+def _transform(model, data, smiles, n_jobs):
+    """Scores of new molecules on the axes of a PCA map's ``model``."""
+    indptr, bits, n_bits, frame, column, invalid, encoding = _encode_bits(
+        data, smiles, model["n_bits"], model["radius"], n_jobs)
+    if encoding != model["encoding"] or n_bits != model["n_bits"]:
+        raise ValueError(f"This map was made from {_describe(model)}; give new molecules the same way")
+    return _project(indptr, bits, model["components"], model["shift"]).astype(np.float32), frame, column, invalid
+
+
+def _describe(model):
+    if model["encoding"] == "fingerprints":
+        return f"binary fingerprints ({model['n_bits']} bits)"
+    return "SMILES"
+
+
 def pca(
     data,
     smiles: str | None = None,
@@ -96,20 +132,7 @@ def pca(
     ``n_bits``) and projected on their first two principal axes: a fast, linear and
     deterministic overview, which separates broad chemotypes but not fine clusters.
     """
-    frame, column, values, array = _inputs(data, smiles)
-    if array is not None:
-        if not _is_binary(array):
-            raise ValueError("pca needs SMILES or binary (0/1) fingerprints; MinHash vectors have no linear structure")
-        indptr, bits = _dense_to_csr(array)
-        n_bits, invalid, encoding = array.shape[1], [], "fingerprints"
-    else:
-        indptr, bits, invalid = _folded_ecfp(values, radius, n_bits, n_jobs=n_jobs)
-        encoding = "ecfp"
-    keep, frame = _drop_invalid(frame, invalid)
-    if keep is not None:  # invalid molecules have empty rows: drop them from the CSR offsets
-        lengths = np.diff(indptr)[keep]
-        indptr = np.zeros(len(lengths) + 1, dtype=np.int64)
-        np.cumsum(lengths, out=indptr[1:])
+    indptr, bits, n_bits, frame, column, invalid, encoding = _encode_bits(data, smiles, n_bits, radius, n_jobs)
     pos, components, shift = _pca_csr(indptr, bits, n_bits)
     pos = pos.astype(np.float32)
     edges = np.empty((0, 2), dtype=np.int64)

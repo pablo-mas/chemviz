@@ -36,7 +36,6 @@ def _add_common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--title", metavar="TEXT", help="viewer title (default: output file name)")
     p.add_argument("--offline", action="store_true", help="embed RDKit.js so the viewer needs no network")
     p.add_argument("--color", metavar="COL", help="column to colour the static plot by")
-    p.add_argument("--radius", type=int, metavar="N", default=2, help="ECFP radius (default: 2)")
     p.add_argument("--n-jobs", type=int, metavar="N", help="processes for SMILES parsing (default: all cores)")
 
 
@@ -46,6 +45,7 @@ def _add_method(p: argparse.ArgumentParser, method: str) -> list[str]:
         suffix = "" if "default" in help else f" (default: {default})"
         p.add_argument(flag, type=type, metavar=metavar, default=default, help=help + suffix)
 
+    opt("--radius", 2, "ECFP radius")
     if method == "pca":
         opt("--n-bits", 2048, "fingerprint size")
         return ["n_bits", "radius", "n_jobs"]
@@ -87,6 +87,20 @@ def _parser() -> argparse.ArgumentParser:
         )
         _add_common(p)
         p.set_defaults(parser=p, params=_add_method(p, method))
+    p = commands.add_parser(
+        "project",
+        help="place new molecules on a saved map",
+        description="Place the molecules of a .csv, .tsv, .smi or .sdf file on a map saved as .chemviz "
+        "(the map does not move); the output has a 'projected' column marking them.",
+        epilog="examples:\n"
+        "  chemviz tmap library.csv -o library.chemviz\n"
+        "  chemviz project library.chemviz hits.csv -o hits.html\n"
+        "  chemviz project library.chemviz hits.csv -o hits.png --color projected",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument("map", type=Path, help="map saved with -o map.chemviz (or Map.save)")
+    _add_common(p)
+    p.set_defaults(parser=p, params=["n_jobs"])
     return parser
 
 
@@ -98,21 +112,24 @@ def main(argv: list[str] | None = None) -> int:
             args.parser.error(f"unsupported output {str(path)!r}; expected one of {', '.join(SUFFIXES)}")
     if args.color and not any(p.suffix.lower() in IMAGE_SUFFIXES for p in outputs):
         args.parser.error("--color applies to static plots: add an output such as -o map.png")
-    if not args.input.is_file():
-        args.parser.error(f"no such file: {str(args.input)!r}")
+    for path in (args.input, getattr(args, "map", None)):
+        if path is not None and not path.is_file():
+            args.parser.error(f"no such file: {str(path)!r}")
     columns = [c.strip() for c in args.columns.split(",")] if args.columns else None
 
     import chemviz  # deferred: importing numba and RDKit takes a moment
 
-    method = getattr(chemviz, args.command)
     try:
         start = time.perf_counter()
+        ref = chemviz.load(args.map) if args.command == "project" else None
+        method = ref.project if ref is not None else getattr(chemviz, args.command)
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             m = method(args.input, args.smiles, **{name: getattr(args, name) for name in args.params})
         for w in caught:
             print(f"chemviz: warning: {w.message}", file=sys.stderr)
-        print(f"Mapped {len(m.x)} molecules in {time.perf_counter() - start:.1f} s", file=sys.stderr)
+        done, n = ("Placed", len(m.x) - len(ref.x)) if ref is not None else ("Mapped", len(m.x))
+        print(f"{done} {n} molecules in {time.perf_counter() - start:.1f} s", file=sys.stderr)
         if args.color and args.color not in m.data.columns:
             raise ValueError(f"Unknown --color column {args.color!r}; available: {list(m.data.columns)}")
         for path in outputs:

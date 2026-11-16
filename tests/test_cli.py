@@ -100,3 +100,25 @@ def test_data_errors(mols, capsys, extra, message, monkeypatch, tmp_path):
 def test_module_entry_point():
     res = subprocess.run([sys.executable, "-m", "chemviz", "--version"], capture_output=True, text=True, check=True)
     assert res.stdout.startswith("chemviz ")
+
+
+def test_project_onto_saved_map(mols, tmp_path, capsys):
+    saved = tmp_path / "ref.chemviz"
+    assert main(["umap", str(mols), "-o", str(saved)]) == 0
+    hits = tmp_path / "hits.smi"
+    hits.write_text("CCCCCCCCCCCO\nc1ccccc1CCCCCCCCCCC\nnot_a_smiles\n", encoding="utf-8")
+    out = tmp_path / "both.csv"
+    args = ["project", str(saved), str(hits), "-o", str(out), "-o", str(tmp_path / "both.png"), "--color", "projected"]
+    assert main(args) == 0
+    err = capsys.readouterr().err
+    assert "Placed 2 molecules" in err and "Skipped 1 invalid" in err
+    coords = pd.read_csv(out)
+    assert len(coords) == 32 and coords["projected"].sum() == 2
+
+
+def test_project_errors(mols, tmp_path, capsys):
+    with pytest.raises(SystemExit) as e:
+        main(["project", str(tmp_path / "missing.chemviz"), str(mols)])
+    assert e.value.code == 2
+    assert main(["project", str(mols), str(mols), "-o", str(tmp_path / "x.csv")]) == 1
+    assert "not a chemviz map file" in capsys.readouterr().err

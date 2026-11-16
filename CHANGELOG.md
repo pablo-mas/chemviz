@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `Map.project()`: place new molecules on an existing map without moving it. TMAP grafts
+  them onto its tree as new branches; UMAP and t-SNE follow umap-learn's and openTSNE's
+  `transform`; PCA projects them on its axes. The result has a `projected` column. The CLI
+  does it with `chemviz project map.chemviz new.csv`.
 - `Map.save("map.chemviz")` and `chemviz.load()`: save a map and reload it without
   recomputing it. Files keep the coordinates, the data with its column types and the MinHash
   vectors (`model=False` leaves them out), and are read without pickle. The CLI writes them

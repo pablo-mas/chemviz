@@ -10,7 +10,7 @@ import numpy as np
 
 from chemviz.graph import _symmetrize, minimum_spanning_forest
 from chemviz.layout import _threads_for, tree_layout
-from chemviz.lsh import lsh_knn
+from chemviz.lsh import _lsh_query, lsh_knn
 from chemviz.maps import Map, _drop_invalid, _encode
 
 
@@ -305,6 +305,106 @@ def tsne_layout(
         for iters, exaggeration in ((early_exaggeration_iter, early_exaggeration), (n_iter, 1.0)):
             pos = _optimize(pos, indptr, nbrs, p, iters, exaggeration, max(n / exaggeration, 50.0), 0.8,
                             update, gains, 64 * nb.get_num_threads())
+    return pos.astype(np.float32)
+
+
+def _quadtree(pos):
+    """Quadtree of fixed points: ``(spos, span, start, end, depth, child, nchild, mass, cx, cy)``."""
+    spos, codes, _, span = _morton_order(pos)
+    cap = 4 * len(pos) + 64
+    while True:
+        arrays = [np.empty(cap, dtype=np.int64) for _ in range(5)] + [np.empty(cap) for _ in range(3)]
+        if _build_tree(spos, codes, *arrays) >= 0:
+            return (spos, span, *arrays)
+        cap *= 2
+
+
+@nb.njit(cache=True, parallel=True)
+def _query_repulsion(qpos, spos, span, start, end, depth, child, nchild, mass, cx, cy, rep, sum_w):
+    """For each query point: sum_j w_ij^2 (y_i - y_j) and sum_j w_ij over the tree's points."""
+    theta2 = _THETA * _THETA
+    for i in nb.prange(qpos.shape[0]):
+        stack = np.empty(4 * _DEPTH + 8, dtype=np.int64)
+        xi, yi = qpos[i, 0], qpos[i, 1]
+        fx, fy, sw = 0.0, 0.0, 0.0
+        stack[0] = 0
+        sp = 1
+        while sp > 0:
+            sp -= 1
+            u = stack[sp]
+            dx, dy = xi - cx[u], yi - cy[u]
+            d2 = dx * dx + dy * dy
+            width = span / (1 << depth[u])
+            if child[u] == -1:
+                for j in range(start[u], end[u]):
+                    dx, dy = xi - spos[j, 0], yi - spos[j, 1]
+                    w = 1.0 / (1.0 + dx * dx + dy * dy)
+                    sw += w
+                    fx += w * w * dx
+                    fy += w * w * dy
+            elif width * width < theta2 * d2:
+                w = 1.0 / (1.0 + d2)
+                sw += mass[u] * w
+                fx += mass[u] * w * w * dx
+                fy += mass[u] * w * w * dy
+            else:
+                for v in range(child[u], child[u] + nchild[u]):
+                    stack[sp] = v
+                    sp += 1
+        rep[i, 0], rep[i, 1], sum_w[i] = fx, fy, sw
+
+
+@nb.njit(cache=True, parallel=True)
+def _transform_step(pos, ref_pos, idx, p, rep, sum_w, exaggeration, lr, momentum, update, gains, max_grad):
+    """openTSNE's partial gradient (repulsion normalised per point) and update, with the
+    gradient norm capped at ``max_grad``."""
+    for i in nb.prange(pos.shape[0]):
+        gx, gy = -rep[i, 0] / sum_w[i], -rep[i, 1] / sum_w[i]
+        for c in range(idx.shape[1]):
+            j = idx[i, c]
+            if j < 0:
+                continue
+            dx, dy = pos[i, 0] - ref_pos[j, 0], pos[i, 1] - ref_pos[j, 1]
+            w = exaggeration * p[i, c] / (1.0 + dx * dx + dy * dy)
+            gx += w * dx
+            gy += w * dy
+        norm = np.sqrt(gx * gx + gy * gy)
+        if norm > max_grad:
+            gx *= max_grad / norm
+            gy *= max_grad / norm
+        norm = 0.0
+        for d, g in ((0, gx), (1, gy)):
+            if (update[i, d] > 0) != (g > 0):
+                gains[i, d] += 0.2
+            else:
+                gains[i, d] = gains[i, d] * 0.8 + 0.01
+            update[i, d] = momentum * update[i, d] - lr * gains[i, d] * g
+            norm += update[i, d] * update[i, d]
+        norm = np.sqrt(norm)
+        if norm > 5.0:
+            update[i, 0] *= 5.0 / norm
+            update[i, 1] *= 5.0 / norm
+        pos[i, 0] += update[i, 0]
+        pos[i, 1] += update[i, 1]
+
+
+def _transform(ref_pos, ref_hashes, hashes, model, perplexity=5.0, n_iter=250):
+    """Positions of new molecules on a t-SNE map, as openTSNE's ``transform`` (its defaults:
+    perplexity 5, median initialisation, 250 iterations at learning rate 0.1 with
+    exaggeration 1.5 and gradients capped at 0.25)."""
+    n_ref = len(ref_hashes)
+    k = min(int(3 * perplexity), n_ref)
+    idx, dist = _lsh_query(ref_hashes, hashes, k, model["n_trees"], model["kc"])
+    p = _conditional_p(dist, min(perplexity, max(k / 3, 1.0)))
+    ref_pos = ref_pos.astype(np.float64)
+    neighbour_pos = np.where((idx >= 0)[:, :, None], ref_pos[np.maximum(idx, 0)], np.nan)
+    pos = np.nanmedian(neighbour_pos, axis=1)
+    tree = _quadtree(ref_pos)
+    rep, sum_w = np.empty_like(pos), np.empty(len(pos))
+    update, gains = np.zeros_like(pos), np.ones_like(pos)
+    for _ in range(n_iter):
+        _query_repulsion(pos, *tree, rep, sum_w)
+        _transform_step(pos, ref_pos, idx, p, rep, sum_w, 1.5, 0.1, 0.8, update, gains, 0.25)
     return pos.astype(np.float32)
 
 
