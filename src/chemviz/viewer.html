@@ -875,7 +875,10 @@ async function main() {
   $("sel-clear").onclick = () => setSelected([], "replace");
   $("sel-export").onclick = () => { if (state.nSelected) exportCsv(); };
   $("toggle").onclick = () => { $("panel").classList.toggle("hidden"); setTimeout(redraw, 200); };
-  window.addEventListener("resize", redraw);
+  window.addEventListener("resize", () => {
+    // A viewer created while hidden or not yet laid out (size 0) could not fit the map: fit it now.
+    if (!(baseScale > 0)) { resetView(); baseScale = state.view.scale; } else redraw();
+  });
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { readTheme(); applyColors(); });
 
   // Point size default depends on density.
