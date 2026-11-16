@@ -158,14 +158,36 @@ def umap_layout(
     init: np.ndarray | None = None,
     seed: int = 0,
 ) -> np.ndarray:
-    """2D UMAP embedding of a kNN graph (e.g. from ``lsh_knn``).
+    """2D UMAP embedding of a kNN graph.
 
-    ``idx`` and ``dist`` are ``(n, k)`` neighbour indices (-1 for missing) and distances.
-    ``n_epochs`` defaults to 500 for up to 10,000 points, 200 above. ``init`` is an
-    ``(n, 2)`` starting layout; by default, a quick tree layout of the graph's minimum
-    spanning forest, which gives a better global structure than a random start.
+    The fuzzy kNN graph is optimised by stochastic gradient descent with negative sampling,
+    as in umap-learn, but all points are updated in parallel from the same positions, so
+    results do not depend on the number of threads.
 
-    Returns an ``(n, 2)`` float32 array. Results are deterministic for a given ``seed``.
+    Parameters
+    ----------
+    idx : numpy.ndarray
+        ``(n, k)`` neighbour indices, as returned by `lsh_knn` (-1 for missing neighbours).
+    dist : numpy.ndarray
+        ``(n, k)`` matching distances.
+    n_epochs : int, optional
+        Optimisation epochs (500 up to 10,000 points, 200 above).
+    min_dist : float, default 0.1
+        Minimum distance between embedded points.
+    spread : float, default 1.0
+        Scale of the embedded distances.
+    negative_sample_rate : int, default 5
+        Negative samples per positive sample.
+    init : numpy.ndarray, optional
+        ``(n, 2)`` starting layout. By default, a quick tree layout of the graph's minimum
+        spanning forest, which gives a better global structure than a random start.
+    seed : int, default 0
+        Random seed. Results are deterministic for a given seed.
+
+    Returns
+    -------
+    numpy.ndarray
+        ``(n, 2)`` float32 coordinates.
     """
     idx = np.asarray(idx, dtype=np.int64)
     dist = np.asarray(dist, dtype=np.float64)
@@ -266,12 +288,59 @@ def umap(
     seed: int = 0,
     n_jobs: int | None = None,
 ) -> Map:
-    """UMAP map of molecules.
+    """Compute a UMAP map of molecules.
 
-    ``data`` is given as for ``tmap``. Molecules are encoded as MinHash of their ECFP
-    substructures, linked to their ``k`` approximate nearest neighbours (Jaccard distance)
-    and embedded with UMAP (``min_dist``, ``n_epochs``; see ``umap_layout``). Clusters are
-    tighter and better separated than in a tree map, but there are no edges to follow.
+    Molecules are encoded as MinHash of their ECFP substructures, linked to their ``k``
+    approximate nearest neighbours (Jaccard distance) and embedded with UMAP, as
+    umap-learn does (see `umap_layout`). Clusters are tight and well separated, but
+    distances between clusters mean little, and there are no edges to follow.
+
+    Parameters
+    ----------
+    data : list, pandas.Series, pandas.DataFrame, str, pathlib.Path or numpy.ndarray
+        The molecules:
+
+        - a list, tuple or Series of SMILES;
+        - a DataFrame with a SMILES column (all its columns are kept in the map);
+        - the path of a ``.csv``, ``.tsv``, ``.smi`` or ``.sdf`` file;
+        - a 2D array of precomputed uint32 MinHash vectors, or of binary fingerprints
+          (bool or 0/1).
+    smiles : str, optional
+        SMILES column of a DataFrame or file (guessed if omitted).
+    k : int, default 15
+        Nearest neighbours per molecule.
+    min_dist : float, default 0.1
+        Minimum distance between embedded points: smaller values give tighter clusters.
+    n_epochs : int, optional
+        Optimisation epochs (500 up to 10,000 molecules, 200 above).
+    kc : int, default 10
+        The LSH Forest ranks ``k * kc`` candidates by exact MinHash distance.
+    n_permutations : int, default 128
+        MinHash size: more permutations estimate similarities more precisely.
+    radius : int, default 2
+        ECFP radius (2 gives ECFP4).
+    n_trees : int, default 8
+        Trees of the LSH Forest; must divide ``n_permutations``.
+    seed : int, default 0
+        Random seed. Results are deterministic for a given seed.
+    n_jobs : int, optional
+        Processes used to parse SMILES (all CPUs by default; 1 disables multiprocessing).
+
+    Returns
+    -------
+    Map
+        The map. Unparsable SMILES are skipped with a warning and their input positions
+        kept in ``Map.invalid``.
+
+    Raises
+    ------
+    ValueError
+        If no molecule can be parsed, the SMILES column is not found, or an array is
+        neither MinHash vectors nor binary fingerprints.
+
+    See Also
+    --------
+    umap_layout : The embedding of a precomputed kNN graph.
     """
     hashes, frame, smiles, invalid, encoding = _encode(data, smiles, n_permutations, radius, n_jobs)
     keep, frame = _drop_invalid(frame, invalid)

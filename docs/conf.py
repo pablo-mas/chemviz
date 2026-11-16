@@ -17,6 +17,8 @@ extensions = [
     "sphinx_copybutton",
 ]
 
+default_role = "py:obj"  # `name` in docstrings links to the API reference
+nitpicky = True  # every reference must resolve (the build treats warnings as errors)
 exclude_patterns = ["_build", "jupyter_execute", "Thumbs.db", ".DS_Store"]
 myst_enable_extensions = ["colon_fence", "deflist"]
 myst_heading_anchors = 3
@@ -30,12 +32,15 @@ autodoc_typehints = "description"
 autodoc_member_order = "bysource"
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
+napoleon_preprocess_types = True  # "int, default 10" and "optional" are not class names
+napoleon_type_aliases = {"array-like": ":term:`array-like <numpy:array_like>`", "sequence": ":term:`sequence`"}
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "numpy": ("https://numpy.org/doc/stable", None),
     "pandas": ("https://pandas.pydata.org/docs", None),
     "matplotlib": ("https://matplotlib.org/stable", None),
+    "IPython": ("https://ipython.readthedocs.io/en/stable", None),
 }
 
 html_theme = "pydata_sphinx_theme"

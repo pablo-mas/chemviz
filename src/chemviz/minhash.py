@@ -105,15 +105,37 @@ def minhash_ecfp(
     chunk_size: int = 10_000,
     n_jobs: int | None = None,
 ) -> np.ndarray:
-    """MinHash of the unfolded ECFP (Morgan) substructure identifiers of each molecule.
+    """MinHash vectors of the ECFP (Morgan) substructures of molecules.
 
-    Like MHFP, the MinHash distance estimates the Jaccard distance between sets of
-    circular substructures, but feature extraction is ~50x faster than MHFP shingling.
-    SMILES are parsed in chunks by ``n_jobs`` worker processes (default: all CPUs;
-    1 disables multiprocessing), so molecules are never all held in memory.
+    Each molecule is the set of its unfolded circular substructure identifiers. As for
+    MHFP, the MinHash distance of two molecules estimates the Jaccard distance between these
+    sets, but extracting them is about 50 times faster than MHFP shingling. SMILES are parsed
+    in chunks by worker processes, so molecules are never all held in memory.
 
-    Returns a ``(n_molecules, n_permutations)`` uint32 array.
-    Raises ``ValueError`` listing the indices of unparsable SMILES.
+    Parameters
+    ----------
+    smiles : sequence of str
+        The molecules.
+    n_permutations : int, default 128
+        MinHash size.
+    radius : int, default 2
+        ECFP radius (2 gives ECFP4).
+    seed : int, default 42
+        Seed of the hash functions: vectors are only comparable for the same seed.
+    chunk_size : int, default 10000
+        SMILES per chunk sent to a worker.
+    n_jobs : int, optional
+        Worker processes (all CPUs by default; 1 disables multiprocessing).
+
+    Returns
+    -------
+    numpy.ndarray
+        ``(n_molecules, n_permutations)`` uint32 array.
+
+    Raises
+    ------
+    ValueError
+        If some SMILES cannot be parsed (the message lists their positions).
     """
     out, invalid = _minhash_ecfp(smiles, n_permutations, radius, seed, chunk_size, n_jobs)
     if invalid:
@@ -142,10 +164,32 @@ def mhfp(
     radius: int = 3,
     seed: int = 42,
 ) -> np.ndarray:
-    """Encode SMILES as MHFP MinHash vectors.
+    """MHFP6 MinHash vectors of molecules (RDKit's MHFP encoder).
 
-    Returns a ``(n_molecules, n_permutations)`` uint32 array.
-    Raises ``ValueError`` listing the indices of unparsable SMILES.
+    Parameters
+    ----------
+    smiles : sequence of str
+        The molecules.
+    n_permutations : int, default 128
+        MinHash size.
+    radius : int, default 3
+        Radius of the circular substructures (3 gives MHFP6).
+    seed : int, default 42
+        Seed of the hash functions.
+
+    Returns
+    -------
+    numpy.ndarray
+        ``(n_molecules, n_permutations)`` uint32 array.
+
+    Raises
+    ------
+    ValueError
+        If some SMILES cannot be parsed (the message lists their positions).
+
+    See Also
+    --------
+    minhash_ecfp : A faster encoding of the same kind.
     """
     mols = [Chem.MolFromSmiles(s) for s in smiles]
     invalid = [i for i, m in enumerate(mols) if m is None]
@@ -161,9 +205,21 @@ def minhash_from_fingerprints(
     n_permutations: int = 128,
     seed: int = 42,
 ) -> np.ndarray:
-    """MinHash a ``(n, n_bits)`` binary fingerprint matrix (set = indices of on-bits).
+    """MinHash vectors of binary fingerprints (each one the set of its on-bits).
 
-    Returns a ``(n, n_permutations)`` uint32 array.
+    Parameters
+    ----------
+    fingerprints : numpy.ndarray
+        ``(n, n_bits)`` binary matrix (bool or 0/1).
+    n_permutations : int, default 128
+        MinHash size.
+    seed : int, default 42
+        Seed of the hash functions.
+
+    Returns
+    -------
+    numpy.ndarray
+        ``(n, n_permutations)`` uint32 array.
     """
     fingerprints = np.asarray(fingerprints, dtype=bool)
     encoder = rdMHFPFingerprint.MHFPEncoder(n_permutations, seed)

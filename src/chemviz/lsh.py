@@ -213,14 +213,36 @@ def lsh_knn(
     n_trees: int = 8,
     kc: int = 10,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Approximate kNN of every row of ``hashes`` among the other rows.
+    """Approximate k nearest neighbours of each row of a MinHash matrix, with an LSH Forest.
 
-    ``hashes`` is a ``(n, d)`` MinHash matrix; ``d`` must be divisible by ``n_trees``.
-    ``kc`` scales the candidate pool (``k * kc``) ranked by MinHash distance.
+    Each tree indexes a band of hash values; the candidates sharing the longest prefixes with
+    a molecule (at least ``k * kc`` of them) are ranked by MinHash distance, the fraction of
+    hash values that differ, which estimates the Jaccard distance.
 
-    Returns ``(indices, distances)``, both ``(n, k)``, sorted by increasing exact
-    distance. Missing neighbours (too few candidates) are marked by index -1 and
-    distance inf.
+    Parameters
+    ----------
+    hashes : numpy.ndarray
+        ``(n, d)`` uint32 MinHash vectors, such as from `minhash_ecfp`.
+    k : int, default 10
+        Neighbours per row.
+    n_trees : int, default 8
+        Trees of the forest; must divide ``d``, with at most 255 values per tree.
+    kc : int, default 10
+        Candidates ranked per row, as a multiple of ``k``: larger values are more accurate
+        and slower.
+
+    Returns
+    -------
+    indices : numpy.ndarray
+        ``(n, k)`` int64 neighbour indices, nearest first; -1 where too few candidates were
+        found.
+    distances : numpy.ndarray
+        ``(n, k)`` float32 MinHash distances (inf for missing neighbours).
+
+    Raises
+    ------
+    ValueError
+        If ``n_trees`` does not divide ``d`` or a tree would index more than 255 values.
     """
     hashes = np.ascontiguousarray(hashes, dtype=np.uint32)
     return _search(hashes, k, n_trees, kc, 0, len(hashes))

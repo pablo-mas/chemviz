@@ -277,15 +277,37 @@ def tsne_layout(
     init: np.ndarray | None = None,
     seed: int = 0,
 ) -> np.ndarray:
-    """2D t-SNE embedding of a kNN graph (e.g. from ``lsh_knn`` with ``k = 3 * perplexity``).
+    """2D t-SNE embedding of a kNN graph.
 
-    ``idx`` and ``dist`` are ``(n, k)`` neighbour indices (-1 for missing) and distances.
-    The optimisation follows openTSNE's defaults: ``early_exaggeration_iter`` iterations
-    with exaggerated attraction, then ``n_iter`` normal ones, learning rate
-    n / exaggeration and momentum 0.8. ``init`` defaults to the tree layout of the minimum
-    spanning forest of the 30 nearest neighbours (rescaled to a standard deviation of 1e-4).
+    Affinities are calibrated to ``perplexity`` on each point's neighbours, and the
+    optimisation follows openTSNE's defaults: ``early_exaggeration_iter`` iterations with
+    exaggerated attraction, then ``n_iter`` normal ones, with learning rate
+    n / exaggeration, momentum 0.8 and Barnes–Hut repulsion on an adaptive quadtree.
 
-    Returns an ``(n, 2)`` float32 array. Results are deterministic for a given ``seed``.
+    Parameters
+    ----------
+    idx : numpy.ndarray
+        ``(n, k)`` neighbour indices, as returned by `lsh_knn` (-1 for missing neighbours).
+    dist : numpy.ndarray
+        ``(n, k)`` matching distances. Use ``k = 3 * perplexity``.
+    perplexity : float, default 30
+        Effective number of neighbours (capped at ``k / 3``).
+    n_iter : int, default 500
+        Iterations after early exaggeration.
+    early_exaggeration_iter : int, default 250
+        Iterations with exaggerated attraction, which form the clusters.
+    early_exaggeration : float, default 12
+        Attraction factor during early exaggeration.
+    init : numpy.ndarray, optional
+        ``(n, 2)`` starting layout. By default, the tree layout of the minimum spanning
+        forest of the 30 nearest neighbours, rescaled to a standard deviation of 1e-4.
+    seed : int, default 0
+        Random seed. Results are deterministic for a given seed.
+
+    Returns
+    -------
+    numpy.ndarray
+        ``(n, 2)`` float32 coordinates.
     """
     idx = np.asarray(idx, dtype=np.int64)
     dist = np.asarray(dist)
@@ -421,13 +443,58 @@ def tsne(
     seed: int = 0,
     n_jobs: int | None = None,
 ) -> Map:
-    """t-SNE map of molecules.
+    """Compute a t-SNE map of molecules.
 
-    ``data`` is given as for ``tmap``. Molecules are encoded as MinHash of their ECFP
-    substructures, linked to their ``3 * perplexity`` approximate nearest neighbours
-    (Jaccard distance; ``kc`` scales the LSH candidate pool) and embedded with t-SNE
-    (see ``tsne_layout``). Like UMAP, it separates clusters well but distances between
-    clusters are not meaningful, and there are no edges to follow.
+    Molecules are encoded as MinHash of their ECFP substructures, linked to their
+    ``3 * perplexity`` approximate nearest neighbours (Jaccard distance) and embedded with
+    t-SNE, as openTSNE does (see `tsne_layout`). Clusters show fine local detail and
+    neighbourhoods are well preserved, but distances between clusters mean little, and
+    there are no edges to follow.
+
+    Parameters
+    ----------
+    data : list, pandas.Series, pandas.DataFrame, str, pathlib.Path or numpy.ndarray
+        The molecules:
+
+        - a list, tuple or Series of SMILES;
+        - a DataFrame with a SMILES column (all its columns are kept in the map);
+        - the path of a ``.csv``, ``.tsv``, ``.smi`` or ``.sdf`` file;
+        - a 2D array of precomputed uint32 MinHash vectors, or of binary fingerprints
+          (bool or 0/1).
+    smiles : str, optional
+        SMILES column of a DataFrame or file (guessed if omitted).
+    perplexity : float, default 30
+        Effective number of neighbours each molecule is attracted to.
+    n_iter : int, default 500
+        Iterations after the 250 of early exaggeration.
+    kc : int, default 3
+        The LSH Forest ranks ``3 * perplexity * kc`` candidates by exact MinHash distance.
+    n_permutations : int, default 128
+        MinHash size: more permutations estimate similarities more precisely.
+    radius : int, default 2
+        ECFP radius (2 gives ECFP4).
+    n_trees : int, default 8
+        Trees of the LSH Forest; must divide ``n_permutations``.
+    seed : int, default 0
+        Random seed. Results are deterministic for a given seed.
+    n_jobs : int, optional
+        Processes used to parse SMILES (all CPUs by default; 1 disables multiprocessing).
+
+    Returns
+    -------
+    Map
+        The map. Unparsable SMILES are skipped with a warning and their input positions
+        kept in ``Map.invalid``.
+
+    Raises
+    ------
+    ValueError
+        If no molecule can be parsed, the SMILES column is not found, or an array is
+        neither MinHash vectors nor binary fingerprints.
+
+    See Also
+    --------
+    tsne_layout : The embedding of a precomputed kNN graph.
     """
     hashes, frame, smiles, invalid, encoding = _encode(data, smiles, n_permutations, radius, n_jobs)
     keep, frame = _drop_invalid(frame, invalid)

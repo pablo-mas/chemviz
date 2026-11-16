@@ -446,17 +446,35 @@ def tree_layout(
     gravity: float = 2.0,
     seed: int = 0,
 ) -> np.ndarray:
-    """2D layout of a spanning forest over ``n`` nodes (e.g. from ``minimum_spanning_forest``).
+    """2D layout of a spanning forest, as used by `tmap`.
 
-    ``iters_coarse`` force iterations are run on the coarsest level (a third as many on
-    intermediate levels) and ``iters_fine`` on the full tree. Coarsening stops once a
-    level has at most ``min_nodes`` nodes. Results are deterministic for a given ``seed``.
+    A multilevel force-directed layout: the tree is coarsened along its edges, each level
+    is laid out (with Barnes–Hut repulsion on a quadtree) and expanded into the next, and
+    disconnected trees are packed together. When a level is expanded, each node is pulled
+    towards its group's position, which keeps branches compact without collapsing the
+    global structure.
 
-    When a level is expanded, each node is pulled towards its group's position with
-    strength ``gravity``. This local gravity keeps branches compact without collapsing
-    the global tree structure, unlike a pull towards the centre.
+    Parameters
+    ----------
+    n : int
+        Number of nodes.
+    edges : numpy.ndarray
+        ``(n_edges, 2)`` node pairs of a forest, such as from `minimum_spanning_forest`.
+    iters_coarse : int, default 300
+        Force iterations on the coarsest level (a third as many on intermediate levels).
+    iters_fine : int, default 100
+        Force iterations on the full tree.
+    min_nodes : int, default 500
+        Coarsening stops once a level has at most this many nodes.
+    gravity : float, default 2.0
+        Strength of the pull of each node towards its group when a level is expanded.
+    seed : int, default 0
+        Random seed. Results are deterministic for a given seed.
 
-    Returns an ``(n, 2)`` float32 array of coordinates (median edge length ~1).
+    Returns
+    -------
+    numpy.ndarray
+        ``(n, 2)`` float32 coordinates (median edge length about 1).
     """
     edges = np.asarray(edges, dtype=np.int64).reshape(-1, 2)
     rng = np.random.default_rng(seed)

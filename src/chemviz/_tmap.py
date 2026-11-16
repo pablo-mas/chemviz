@@ -24,17 +24,60 @@ def tmap(
 ) -> Map:
     """Compute a tree map (TMAP) of molecules.
 
-    ``data`` can be:
+    Molecules are encoded as MinHash of their ECFP substructures, linked to their ``k``
+    approximate nearest neighbours (LSH Forest), reduced to a minimum spanning tree and
+    laid out in 2D. Series of related molecules and their branching are easy to follow,
+    and nearest neighbours stay together.
 
-    - a list, tuple or Series of SMILES;
-    - a DataFrame, with its SMILES column given by ``smiles`` (guessed if omitted);
-    - a path to a .csv, .tsv, .smi or .sdf file;
-    - a precomputed 2D array: uint32 MinHash vectors, or binary fingerprints (bool or 0/1).
+    Parameters
+    ----------
+    data : list, pandas.Series, pandas.DataFrame, str, pathlib.Path or numpy.ndarray
+        The molecules:
 
-    Molecules are encoded as MinHash of their ECFP substructures (``radius``,
-    ``n_permutations``), linked to their ``k`` approximate nearest neighbours (LSH
-    Forest with ``n_trees`` trees, ``k * kc`` candidates), reduced to a minimum spanning
-    tree and laid out in 2D. Unparsable SMILES are skipped with a warning.
+        - a list, tuple or Series of SMILES;
+        - a DataFrame with a SMILES column (all its columns are kept in the map);
+        - the path of a ``.csv``, ``.tsv``, ``.smi`` or ``.sdf`` file;
+        - a 2D array of precomputed uint32 MinHash vectors, or of binary fingerprints
+          (bool or 0/1).
+    smiles : str, optional
+        SMILES column of a DataFrame or file (guessed if omitted).
+    k : int, default 10
+        Nearest neighbours per molecule in the graph the tree is drawn from.
+    kc : int, default 10
+        The LSH Forest ranks ``k * kc`` candidates by exact MinHash distance: larger
+        values find neighbours more accurately, more slowly.
+    n_permutations : int, default 128
+        MinHash size: more permutations estimate similarities more precisely.
+    radius : int, default 2
+        ECFP radius (2 gives ECFP4).
+    n_trees : int, default 8
+        Trees of the LSH Forest; must divide ``n_permutations``.
+    seed : int, default 0
+        Random seed. Results are deterministic for a given seed.
+    n_jobs : int, optional
+        Processes used to parse SMILES (all CPUs by default; 1 disables multiprocessing).
+
+    Returns
+    -------
+    Map
+        The map. Unparsable SMILES are skipped with a warning and their input positions
+        kept in ``Map.invalid``.
+
+    Raises
+    ------
+    ValueError
+        If no molecule can be parsed, the SMILES column is not found, or an array is
+        neither MinHash vectors nor binary fingerprints.
+
+    See Also
+    --------
+    umap, tsne, pca : Other methods with the same inputs.
+
+    Examples
+    --------
+    >>> import chemviz as cv
+    >>> m = cv.tmap("molecules.csv")
+    >>> m.save("map.html")
     """
     hashes, frame, smiles, invalid, encoding = _encode(data, smiles, n_permutations, radius, n_jobs)
     keep, frame = _drop_invalid(frame, invalid)

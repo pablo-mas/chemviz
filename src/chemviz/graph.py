@@ -32,13 +32,21 @@ def _kruskal(n, src, dst):
 def minimum_spanning_forest(
     indices: np.ndarray, distances: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Minimum spanning forest of the undirected kNN graph given by ``lsh_knn``.
+    """Minimum spanning forest of an undirected kNN graph (Kruskal).
 
-    Entries with index -1 (missing neighbours) are ignored. Disconnected
-    components yield one tree each.
+    Parameters
+    ----------
+    indices : numpy.ndarray
+        ``(n, k)`` neighbour indices, as returned by `lsh_knn`; entries of -1 are ignored.
+    distances : numpy.ndarray
+        ``(n, k)`` matching distances, used as edge weights.
 
-    Returns ``(edges, weights)``: an ``(n - n_components, 2)`` int64 array and
-    the matching float32 distances.
+    Returns
+    -------
+    edges : numpy.ndarray
+        ``(n - n_components, 2)`` int64 node pairs: one tree per connected component.
+    weights : numpy.ndarray
+        The matching float32 distances.
     """
     n, k = indices.shape
     src = np.repeat(np.arange(n), k)

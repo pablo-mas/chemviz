@@ -32,3 +32,10 @@ cv.tmap("molecules.csv").save("map.html")
 
 installation
 ```
+
+```{toctree}
+:maxdepth: 1
+:caption: Reference
+
+api
+```

@@ -20,11 +20,22 @@ def find_smiles_column(df: pd.DataFrame) -> str:
 
 
 def read_molecules(path: str | Path, smiles: str | None = None) -> tuple[pd.DataFrame, str]:
-    """Read a .csv, .tsv, .smi or .sdf file into a DataFrame.
+    """Read a molecule file into a DataFrame.
 
-    Returns the DataFrame and the name of its SMILES column. SDF records RDKit
-    cannot read are kept as rows with an empty SMILES, so they are reported as
-    invalid like unparsable SMILES.
+    Parameters
+    ----------
+    path : str or pathlib.Path
+        A ``.csv``, ``.tsv``, ``.smi`` or ``.sdf`` file. SDF properties become columns.
+    smiles : str, optional
+        SMILES column of a ``.csv`` or ``.tsv`` file (guessed if omitted).
+
+    Returns
+    -------
+    data : pandas.DataFrame
+        One row per molecule. SDF records RDKit cannot read are kept with an empty SMILES,
+        so that they are reported as invalid like unparsable SMILES.
+    smiles : str
+        Name of the SMILES column of ``data``.
     """
     path = Path(path)
     suffix = path.suffix.lower()

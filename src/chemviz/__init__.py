@@ -28,3 +28,12 @@ __all__ = [
     "umap",
     "umap_layout",
 ]
+
+
+def __getattr__(name):
+    # MapWidget needs the optional anywidget dependency: import it on first access only.
+    if name == "MapWidget":
+        from chemviz._widget import MapWidget
+
+        return MapWidget
+    raise AttributeError(f"module 'chemviz' has no attribute {name!r}")

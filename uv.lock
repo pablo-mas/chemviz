@@ -347,6 +347,7 @@ dev = [
     { name = "scipy" },
 ]
 docs = [
+    { name = "anywidget" },
     { name = "myst-nb" },
     { name = "pydata-sphinx-theme" },
     { name = "sphinx", version = "9.1.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13'" },
@@ -373,6 +374,7 @@ dev = [
     { name = "scipy", specifier = ">=1.18.1" },
 ]
 docs = [
+    { name = "anywidget", specifier = ">=0.11.0" },
     { name = "myst-nb", specifier = ">=1.4.0" },
     { name = "pydata-sphinx-theme", specifier = ">=0.24.0" },
     { name = "sphinx", specifier = ">=9.1.1" },

@@ -128,6 +128,23 @@ def load(path) -> Map:
     """Load a map saved with ``Map.save("map.chemviz")``.
 
     Files are read without pickle, so loading a file from someone else cannot run code.
+
+    Parameters
+    ----------
+    path : str or pathlib.Path
+        A ``.chemviz`` file.
+
+    Returns
+    -------
+    Map
+        The map, with its data, column types and index as saved, and its `Map.model` if it
+        was saved (then new molecules can be placed on it with `Map.project`).
+
+    Raises
+    ------
+    ValueError
+        If the file is not a chemviz map, was written by a newer version of chemviz, or is
+        corrupted.
     """
     try:
         zf = zipfile.ZipFile(path)

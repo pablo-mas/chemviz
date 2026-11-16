@@ -68,11 +68,25 @@ def _dense_to_csr(fingerprints):
 
 
 def pca_layout(fingerprints: np.ndarray) -> np.ndarray:
-    """2D PCA of a ``(n, n_bits)`` binary fingerprint matrix.
+    """2D PCA of a binary fingerprint matrix.
 
-    The covariance is accumulated from the on-bits only, so it is exact and fast for
-    sparse fingerprints. Returns an ``(n, 2)`` float32 array of scores on the first two
-    principal axes.
+    The covariance is accumulated from the on-bits only, so it is exact and fast for sparse
+    fingerprints, even for millions of molecules.
+
+    Parameters
+    ----------
+    fingerprints : numpy.ndarray
+        ``(n, n_bits)`` binary matrix (bool or 0/1).
+
+    Returns
+    -------
+    numpy.ndarray
+        ``(n, 2)`` float32 scores on the first two principal axes.
+
+    Raises
+    ------
+    ValueError
+        If ``fingerprints`` is not a 2D binary matrix.
     """
     fingerprints = np.asarray(fingerprints)
     if fingerprints.ndim != 2 or not _is_binary(fingerprints):
@@ -125,12 +139,46 @@ def pca(
     radius: int = 2,
     n_jobs: int | None = None,
 ) -> Map:
-    """Principal component analysis map of molecules.
+    """Compute a principal component analysis (PCA) map of molecules.
 
-    ``data`` is given as for ``tmap`` (SMILES, DataFrame or file), or as a 2D binary
-    fingerprint array. Molecules are encoded as folded ECFP fingerprints (``radius``,
-    ``n_bits``) and projected on their first two principal axes: a fast, linear and
-    deterministic overview, which separates broad chemotypes but not fine clusters.
+    Molecules are encoded as folded ECFP fingerprints and projected on their first two
+    principal axes: a fast, linear and deterministic overview, which shows broad trends
+    and gradients but in which similar molecules overlap.
+
+    Parameters
+    ----------
+    data : list, pandas.Series, pandas.DataFrame, str, pathlib.Path or numpy.ndarray
+        The molecules:
+
+        - a list, tuple or Series of SMILES;
+        - a DataFrame with a SMILES column (all its columns are kept in the map);
+        - the path of a ``.csv``, ``.tsv``, ``.smi`` or ``.sdf`` file;
+        - a 2D array of binary fingerprints (bool or 0/1). MinHash vectors have no
+          linear structure and are not accepted.
+    smiles : str, optional
+        SMILES column of a DataFrame or file (guessed if omitted).
+    n_bits : int, default 2048
+        Size of the folded fingerprints.
+    radius : int, default 2
+        ECFP radius (2 gives ECFP4).
+    n_jobs : int, optional
+        Processes used to parse SMILES (all CPUs by default; 1 disables multiprocessing).
+
+    Returns
+    -------
+    Map
+        The map. Unparsable SMILES are skipped with a warning and their input positions
+        kept in ``Map.invalid``.
+
+    Raises
+    ------
+    ValueError
+        If no molecule can be parsed, the SMILES column is not found, or an array is not
+        a binary fingerprint matrix.
+
+    See Also
+    --------
+    pca_layout : The PCA of a precomputed fingerprint matrix.
     """
     indptr, bits, n_bits, frame, column, invalid, encoding = _encode_bits(data, smiles, n_bits, radius, n_jobs)
     pos, components, shift = _pca_csr(indptr, bits, n_bits)

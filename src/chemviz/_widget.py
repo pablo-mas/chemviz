@@ -32,12 +32,23 @@ export default { render };
 
 
 class MapWidget(anywidget.AnyWidget):
-    """The interactive viewer of a map in a notebook, with its selection in Python.
+    """The interactive viewer of a map in a Jupyter notebook, with its selection in Python.
 
-    ``rows`` holds the row positions of the selected molecules, kept in sync with the
-    viewer both ways (observe it with ``widget.observe(callback, names="rows")``).
-    ``selected`` gives the selected rows of the map's data, with x and y; assigning index
-    labels or a boolean mask to it selects those molecules in the viewer.
+    Created by `Map.widget`. The selection is synced both ways: selecting molecules in the
+    viewer updates `rows` and `selected`, and assigning them selects molecules in the
+    viewer.
+
+    Attributes
+    ----------
+    rows : list of int
+        Row positions of the selected molecules, in increasing order. Observe it to react
+        to selections: ``widget.observe(callback, names="rows")``.
+    selected : pandas.DataFrame
+        The selected molecules: their rows of the map's data, with ``x`` and ``y`` columns.
+        Assign index labels or a boolean mask (one value per molecule) to select molecules
+        from Python.
+    height : int
+        Height of the viewer, in pixels.
     """
 
     _esm = _ESM

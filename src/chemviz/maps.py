@@ -13,14 +13,32 @@ from chemviz.minhash import _minhash_ecfp, minhash_from_fingerprints
 
 @dataclass
 class Map:
-    """A 2D map of molecules, made by ``tmap``, ``umap``, ``tsne`` or ``pca``.
+    """A 2D map of molecules, as returned by `tmap`, `umap`, `tsne`, `pca` and `load`.
 
-    ``x``, ``y`` and ``data`` rows are aligned (one per mapped molecule); ``edges``
-    holds pairs of row positions (the tree of a TMAP, empty for other methods). ``data`` keeps the input rows and index, minus
-    ``invalid`` (positions in the input of the molecules that could not be parsed).
-    ``smiles`` names the SMILES column of ``data``, if any (used to draw structures).
-    ``model`` keeps what is needed to place new molecules on the map: the encoding and
-    method parameters, and the molecules' MinHash vectors (or the PCA axes).
+    The coordinates and the data are aligned: row ``i`` of `data` is drawn at
+    ``(x[i], y[i])``.
+
+    Attributes
+    ----------
+    x, y : numpy.ndarray
+        Coordinates of the mapped molecules, one per row of `data` (float32).
+    edges : numpy.ndarray
+        ``(n_edges, 2)`` pairs of row positions: the tree of a TMAP, empty for the other
+        methods.
+    data : pandas.DataFrame
+        The input rows (all columns, original index), minus the molecules that could not
+        be parsed.
+    invalid : numpy.ndarray
+        Positions in the input of the molecules that could not be parsed.
+    smiles : str or None
+        Name of the SMILES column of `data`, used to draw structures (None for inputs
+        given as fingerprints or MinHash vectors).
+    method : str
+        ``"tmap"``, ``"umap"``, ``"tsne"`` or ``"pca"``.
+    model : dict or None
+        What `project` needs to place new molecules on the map: the encoding and method
+        parameters, and the molecules' MinHash vectors (or the PCA axes). None for maps
+        saved with ``model=False``.
     """
 
     x: np.ndarray
@@ -33,26 +51,60 @@ class Map:
     model: dict | None = field(default=None, repr=False, compare=False)
 
     def to_dataframe(self) -> pd.DataFrame:
-        """The input rows with ``x`` and ``y`` columns added."""
+        """The input rows with ``x`` and ``y`` columns added.
+
+        Returns
+        -------
+        pandas.DataFrame
+            A copy of `data` with the coordinates as two extra columns.
+        """
         return self.data.assign(x=self.x, y=self.y)
 
     def project(self, data, smiles: str | None = None, *, n_jobs: int | None = None) -> "Map":
         """Place new molecules on this map, without moving the molecules already on it.
 
-        ``data`` is given as for the method that made the map (SMILES, DataFrame, file or
-        array, encoded the same way). Returns a new map holding this map's molecules then
-        the new ones, with a ``projected`` column (True for the new molecules) to colour
-        or filter them; it can itself receive more molecules. Unparsable SMILES are
-        skipped with a warning.
-
         Each method places molecules as its reference implementation does:
 
-        - ``tmap``: each group of related new molecules forms a branch grafted onto its
-          closest molecule of the map, in the widest free direction;
+        - ``tmap``: the new molecules and the map's tree form a minimum spanning tree, so
+          each group of related new molecules becomes a branch grafted onto its closest
+          molecule on the map;
         - ``umap``: as umap-learn's ``transform``, from the weighted mean of the nearest
           neighbours on the map;
         - ``tsne``: as openTSNE's ``transform``, from the median of the nearest neighbours;
         - ``pca``: exact projection on the map's principal axes.
+
+        Parameters
+        ----------
+        data : list, pandas.Series, pandas.DataFrame, str, pathlib.Path or numpy.ndarray
+            The new molecules, given as for the method that made the map, and encoded the
+            same way (SMILES for maps of SMILES, fingerprints for maps of fingerprints).
+        smiles : str, optional
+            SMILES column of a DataFrame or file (guessed if omitted).
+        n_jobs : int, optional
+            Processes used to parse SMILES (all CPUs by default).
+
+        Returns
+        -------
+        Map
+            This map's molecules followed by the new ones, with a ``projected`` column (True
+            for the new molecules). It can itself receive more molecules.
+
+        Raises
+        ------
+        ValueError
+            If the map has no `model` (it was saved with ``model=False``), if the new
+            molecules are not given the same way as the map's, or if none of them is valid.
+
+        Warns
+        -----
+        UserWarning
+            If some SMILES cannot be parsed; these molecules are skipped.
+
+        Examples
+        --------
+        >>> ref = cv.tmap("library.csv")
+        >>> m = ref.project("hits.csv")
+        >>> m.save("hits.html")
         """
         from chemviz._project import project
 
@@ -61,23 +113,61 @@ class Map:
     def to_html(self, columns=None, title: str = "chemviz", offline: bool = False) -> str:
         """The interactive WebGL viewer as a self-contained HTML page.
 
-        ``columns`` restricts the ``data`` columns embedded (all by default); they can
-        be used to colour, filter, search and are shown on hover. Structures are drawn
-        with RDKit.js, loaded from a CDN when the page opens; with ``offline=True`` it
-        is embedded instead (about 3.3 MB more), so the page needs no network at all.
-        RDKit.js is then downloaded once and cached (see ``chemviz.viewer.cache_dir``).
+        Parameters
+        ----------
+        columns : list of str, optional
+            Columns of `data` to embed (all by default). Embedded columns can be used to
+            colour, filter and search, and are shown on hover.
+        title : str, default "chemviz"
+            Title of the page.
+        offline : bool, default False
+            Embed RDKit.js, which draws the structures, in the page (about 3.3 MB more) so
+            that it needs no network. By default it is loaded from a CDN when the page opens.
+            RDKit.js is downloaded once, checked against a pinned SHA-256 and cached in
+            ``~/.cache/chemviz`` (or ``$CHEMVIZ_CACHE``).
+
+        Returns
+        -------
+        str
+            The HTML page.
+
+        See Also
+        --------
+        save : Write the page to a file.
+        show : Display the page in a notebook.
         """
         from chemviz.viewer import to_html
 
         return to_html(self.x, self.y, self.edges, self.data, self.smiles, columns, title, offline)
 
     def save(self, path, columns=None, title: str | None = None, offline: bool = False, model: bool = True) -> None:
-        """Write the map to a file, by extension.
+        """Write the map to a file, in a format chosen by the file extension.
 
-        - ``.html``: the interactive viewer (``columns``, ``title``, ``offline``: see ``to_html``).
-        - ``.chemviz``: the map itself, to reload with ``chemviz.load``. With ``model=False``
-          the MinHash vectors are left out: the file is smaller, but new molecules can no
-          longer be placed on the map.
+        - ``.html``: the interactive viewer (see `to_html`).
+        - ``.chemviz``: the map itself, to reload with `chemviz.load`. The file keeps the
+          coordinates, the data with its column types and index, and the `model`. It is read
+          without pickle, so opening a file from someone else cannot run code.
+
+        Parameters
+        ----------
+        path : str or pathlib.Path
+            File to write, ending in ``.html`` or ``.chemviz``.
+        columns, title, offline
+            For ``.html`` files: as for `to_html`. The title defaults to the file name.
+        model : bool, default True
+            For ``.chemviz`` files: keep the MinHash vectors (512 bytes per molecule). Without
+            them the file is smaller, but new molecules can no longer be placed on the map.
+
+        Raises
+        ------
+        ValueError
+            If the extension is neither ``.html`` nor ``.chemviz``.
+
+        Examples
+        --------
+        >>> m.save("map.html")
+        >>> m.save("map.chemviz")
+        >>> m = cv.load("map.chemviz")
         """
         path = Path(path)
         suffix = path.suffix.lower()
@@ -91,7 +181,24 @@ class Map:
             raise ValueError(f"Cannot save a map as {path.suffix!r}: use .html or .chemviz")
 
     def show(self, columns=None, title: str = "chemviz", height: int = 650, offline: bool = False):
-        """Display the interactive viewer inline in a Jupyter notebook (see ``to_html``)."""
+        """Display the interactive viewer in a Jupyter notebook.
+
+        Parameters
+        ----------
+        columns, title, offline
+            As for `to_html`.
+        height : int, default 650
+            Height of the viewer, in pixels.
+
+        Returns
+        -------
+        IPython.display.HTML
+            The viewer, displayed when it is the last expression of a cell.
+
+        See Also
+        --------
+        widget : The viewer as a widget, with its selection synced to Python.
+        """
         try:
             from IPython.display import HTML
         except ImportError as e:
@@ -103,12 +210,36 @@ class Map:
                     'sandbox="allow-scripts allow-downloads"></iframe>')
 
     def widget(self, columns=None, title: str = "chemviz", height: int = 650, offline: bool = False):
-        """The interactive viewer as a Jupyter widget, with its selection in Python.
+        """The interactive viewer as a Jupyter widget, with its selection synced to Python.
 
         Select molecules in the viewer (click, lasso, search) and read them back with
-        ``widget.selected`` (a DataFrame), or assign index labels or a boolean mask to
-        ``widget.selected`` to select molecules from Python. Needs the ``jupyter`` extra
-        (``pip install chemviz[jupyter]``). Other arguments are as for ``to_html``.
+        ``widget.selected``, or assign index labels or a boolean mask to
+        ``widget.selected`` to select molecules from Python. Needs the ``jupyter`` extra:
+        ``pip install "chemviz[jupyter]"``.
+
+        Parameters
+        ----------
+        columns, title, offline
+            As for `to_html`.
+        height : int, default 650
+            Height of the viewer, in pixels.
+
+        Returns
+        -------
+        chemviz.MapWidget
+            The widget, displayed when it is the last expression of a cell.
+
+        Raises
+        ------
+        ImportError
+            If anywidget is not installed.
+
+        Examples
+        --------
+        >>> w = m.widget()
+        >>> w                                   # select molecules in the viewer
+        >>> w.selected                          # the selected rows, as a DataFrame
+        >>> w.selected = df.index[df.pKi > 8]   # select molecules from Python
         """
         try:
             from chemviz._widget import MapWidget
@@ -117,10 +248,32 @@ class Map:
         return MapWidget(self, self.to_html(columns, title, offline), height)
 
     def plot(self, color=None, ax=None, edges: bool = True, cmap=None, **scatter_kws):
-        """Static matplotlib plot. ``color`` is a column of ``data`` or an array of values.
+        """Static plot of the map with matplotlib.
 
-        Numeric values use a colour bar (clipped to the 1-99th percentiles), others a legend.
-        Returns the matplotlib Axes.
+        Parameters
+        ----------
+        color : str or array-like, optional
+            A column of `data`, or one value per molecule. Numeric values get a colour bar
+            (clipped to their 1st–99th percentiles), others a legend.
+        ax : matplotlib.axes.Axes, optional
+            Axes to draw on (a new 8 × 8 inch figure by default).
+        edges : bool, default True
+            Draw the tree edges of a TMAP.
+        cmap : str or matplotlib.colors.Colormap, optional
+            Colour map (default: ``"viridis"`` for numbers, ``"tab10"`` or ``"tab20"`` for
+            categories).
+        **scatter_kws
+            Passed to `matplotlib.axes.Axes.scatter`, such as the point size ``s``.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+            The axes drawn on.
+
+        Examples
+        --------
+        >>> ax = m.plot(color="qed")
+        >>> ax.figure.savefig("map.png", dpi=200)
         """
         import matplotlib.pyplot as plt
         from matplotlib.collections import LineCollection
