@@ -205,8 +205,17 @@ are alternative encoders, and `read_molecules` loads a molecule file into a Data
 
 ## Benchmarks
 
-Both tools were run on the same MinHash vectors. Times cover kNN, tree and layout; peak memory
-is for the whole process. Measured on an Intel i7-12700K (20 threads) with 15 GB of RAM.
+**Setup.** All benchmarks ran on an Intel i7-12700K (20 threads, 15 GB of RAM) under Linux
+(WSL2), using every thread, with chemviz 0.1.0 on Python 3.12, numba 0.68 and RDKit 2026.09.
+Each figure is a single run, with numba functions compiled beforehand. Every tool runs with
+its default parameters: 128 MinHash permutations of ECFP4, an 8-tree LSH Forest, k = 10 and
+kc = 10 for TMAP. ZINC250k is the usual 249,455-molecule set. The ChEMBL 1M subset is a
+seeded random sample of the RDKit-parsable SMILES of ChEMBL 37, and ChEMBL 37 itself has
+2.9M of them.
+
+**TMAP vs the original tmap** (tmap-viz 1.0.16, Python 3.10). Both tools were run on the same
+MinHash vectors, each in its own process. Times cover kNN, tree and layout; peak memory is for
+the whole process.
 
 | Dataset | chemviz | tmap (original) |
 |---|---|---|
@@ -246,9 +255,12 @@ kNN graph:
 | ZINC250k, same kNN graph | Time | kNN preservation | Distance correlation |
 |---|---|---|---|
 | chemviz UMAP | **9.5 s** | 0.073 | 0.28 |
-| umap-learn 0.6 | 52 s | 0.068 | 0.28 |
+| umap-learn 0.6.0 | 52 s | 0.068 | 0.28 |
 | chemviz t-SNE | **82 s** | **0.345** | 0.31 |
-| openTSNE 1.0 (spectral initialisation) | 94 s | 0.337 | **0.32** |
+| openTSNE 1.0.4 (spectral initialisation) | 94 s | 0.337 | **0.32** |
+
+umap-learn and openTSNE ran with their defaults on the graphs chemviz uses: 15 neighbours for
+UMAP, and 90 neighbours with perplexity 30 for t-SNE.
 
 Scripts are in [`benchmarks/`](https://github.com/pablo-mas/chemviz/tree/main/benchmarks)
 (`compare_tmap.py`, `compare_methods.py`).
