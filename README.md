@@ -74,7 +74,7 @@ m.to_dataframe()  # data + x, y columns
 |---|---|---|---|
 | `cv.tmap` | A tree linking each molecule to a close neighbour: series and their branching are easy to follow, and nearest neighbours stay together. | 9 s | 37 s |
 | `cv.umap` | Tight, well separated clusters; distances between clusters mean little. | 14 s | 58 s |
-| `cv.tsne` | Clusters with fine local detail, well preserved neighbourhoods; distances between clusters mean little. | 97 s | 6.5 min |
+| `cv.tsne` | Clusters with fine local detail, well preserved neighbourhoods; distances between clusters mean little. | 90 s | 6.5 min |
 | `cv.pca` | A linear projection of fingerprints: broad trends and gradients, but similar molecules overlap. | 5 s | 19 s |
 
 Times are end to end from SMILES (see [benchmarks](#benchmarks)). TMAP, UMAP and t-SNE use
@@ -231,7 +231,7 @@ Map quality, comparing chemviz with tmap:
 |---|---|---|---|---|---|---|---|
 | TMAP | 9 s | 0.320 | 0.03 | 37 s | 2.6 GB | **0.439** | 0.06 |
 | UMAP | 14 s | 0.072 | 0.29 | 58 s | 3.3 GB | 0.187 | 0.15 |
-| t-SNE | 97 s | **0.341** | 0.30 | 382 s | 4.3 GB | 0.408 | 0.25 |
+| t-SNE | 90 s | **0.345** | 0.31 | 382 s | 4.3 GB | 0.408 | 0.25 |
 | PCA | 5 s | 0.002 | **0.44** | 19 s | 1.7 GB | 0.008 | **0.26** |
 
 *Distance correlation* is the Spearman correlation between MinHash distance and 2D distance
@@ -246,8 +246,8 @@ kNN graph:
 |---|---|---|---|
 | chemviz UMAP | **9.5 s** | 0.073 | 0.28 |
 | umap-learn 0.6 | 52 s | 0.068 | 0.28 |
-| chemviz t-SNE | 85 s | 0.341 | 0.30 |
-| openTSNE 1.0 (spectral initialisation) | 94 s | 0.337 | 0.32 |
+| chemviz t-SNE | **82 s** | **0.345** | 0.31 |
+| openTSNE 1.0 (spectral initialisation) | 94 s | 0.337 | **0.32** |
 
 Scripts are in [`benchmarks/`](https://github.com/pablo-mas/chemviz/tree/main/benchmarks)
 (`compare_tmap.py`, `compare_methods.py`).
