@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 import chemviz as cv
-from chemviz.tsne import _affinities, _conditional_p
+from chemviz._tsne import _affinities, _conditional_p
 
 SERIES_SMILES = [
     ["C" * i + "O" for i in range(1, 16)],

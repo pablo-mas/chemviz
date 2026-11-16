@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 import chemviz as cv
-from chemviz.umap import _curve_params, _fuzzy_graph, _smooth_knn
+from chemviz._umap import _curve_params, _fuzzy_graph, _smooth_knn
 
 SERIES_SMILES = [
     ["C" * i + "O" for i in range(1, 16)],
