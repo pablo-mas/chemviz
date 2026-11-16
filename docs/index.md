@@ -31,11 +31,29 @@ cv.tmap("molecules.csv").save("map.html")
 :caption: Getting started
 
 installation
+quickstart
+methods
 ```
 
 ```{toctree}
 :maxdepth: 1
-:caption: Reference
+:caption: User guide
 
+inputs
+viewer
+saving
+projection
+jupyter
+large
+cli
+```
+
+```{toctree}
+:maxdepth: 1
+:caption: More
+
+gallery
+how-it-works
+benchmarks
 api
 ```

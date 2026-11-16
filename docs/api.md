@@ -33,7 +33,7 @@ Needs the `jupyter` extra: `pip install "chemviz[jupyter]"`.
 
 ## Building blocks
 
-The steps of the methods, for custom pipelines (see the how-it-works page, coming soon).
+The steps of the methods, for custom pipelines (see {doc}`how-it-works`).
 
 ```{eval-rst}
 .. autofunction:: minhash_ecfp

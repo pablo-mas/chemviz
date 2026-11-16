@@ -27,6 +27,7 @@ myst_heading_anchors = 3
 nb_execution_mode = "cache"
 nb_execution_timeout = 600
 nb_execution_raise_on_error = True
+nb_execution_in_temp = True  # files the examples write do not land in docs/
 
 autodoc_typehints = "description"
 autodoc_member_order = "bysource"
