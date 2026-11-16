@@ -6,6 +6,7 @@ from chemviz.maps import Map
 from chemviz.minhash import mhfp, minhash_ecfp, minhash_from_fingerprints
 from chemviz.pca import pca, pca_layout
 from chemviz.tmap import tmap
+from chemviz.tsne import tsne, tsne_layout
 from chemviz.umap import umap, umap_layout
 
 __all__ = [
@@ -20,6 +21,8 @@ __all__ = [
     "read_molecules",
     "tmap",
     "tree_layout",
+    "tsne",
+    "tsne_layout",
     "umap",
     "umap_layout",
 ]
