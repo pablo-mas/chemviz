@@ -102,6 +102,20 @@ class Map:
         return HTML(f'<iframe srcdoc="{doc}" style="width:100%;height:{int(height)}px;border:0" '
                     'sandbox="allow-scripts allow-downloads"></iframe>')
 
+    def widget(self, columns=None, title: str = "chemviz", height: int = 650, offline: bool = False):
+        """The interactive viewer as a Jupyter widget, with its selection in Python.
+
+        Select molecules in the viewer (click, lasso, search) and read them back with
+        ``widget.selected`` (a DataFrame), or assign index labels or a boolean mask to
+        ``widget.selected`` to select molecules from Python. Needs the ``jupyter`` extra
+        (``pip install chemviz[jupyter]``). Other arguments are as for ``to_html``.
+        """
+        try:
+            from chemviz._widget import MapWidget
+        except ImportError as e:
+            raise ImportError("widget() needs anywidget: pip install 'chemviz[jupyter]'") from e
+        return MapWidget(self, self.to_html(columns, title, offline), height)
+
     def plot(self, color=None, ax=None, edges: bool = True, cmap=None, **scatter_kws):
         """Static matplotlib plot. ``color`` is a column of ``data`` or an array of values.
 

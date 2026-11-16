@@ -21,7 +21,8 @@ environment to set up, and it maps millions of molecules on a laptop.
   that is 2.5–3× faster than the original tmap, with 3–4× less memory (see
   [benchmarks](#benchmarks)).
 - **Interactive viewer**: a single self-contained HTML file (WebGL) that shows the structure
-  on hover, colours, filters, searches, lasso-selects and exports to CSV. It also works offline.
+  on hover, colours, filters, searches, lasso-selects and exports to CSV. It also works offline,
+  and in Jupyter its selection syncs with Python.
 - **Static plots** with matplotlib, for papers and reports.
 - **New molecules on an existing map**: `ref.project("hits.csv")` places them in seconds,
   without moving the map (see [placing new molecules](#placing-new-molecules-on-a-map)).
@@ -33,6 +34,8 @@ environment to set up, and it maps millions of molecules on a laptop.
 pip install chemviz
 # or
 uv add chemviz
+# with the Jupyter widget (selections synced with Python)
+pip install "chemviz[jupyter]"
 ```
 
 Requires Python ≥ 3.12. Every dependency (RDKit, numba, numpy, pandas, matplotlib, joblib)
@@ -160,6 +163,17 @@ The viewer:
 
 Maps of a million molecules load in about a second. The data is compressed into the file:
 250k molecules take ~12 MB and 1M ~40 MB.
+
+**Selections in Python (Jupyter).** `m.widget()` shows the viewer in a notebook with its
+selection synced to Python, both ways (needs `pip install "chemviz[jupyter]"`):
+
+```python
+w = m.widget()
+w                                        # select molecules: click, lasso, search
+w.selected                               # the selected rows (data + x, y), as a DataFrame
+w.selected = df.index[df.pKi > 8]        # select from Python: index labels or a boolean mask
+w.observe(lambda change: print(len(change["new"])), names="rows")   # react to selections
+```
 
 **Offline use.** Structures are drawn with [RDKit.js](https://www.npmjs.com/package/@rdkit/rdkit),
 loaded from a CDN when the page opens. To get a file that needs no network at all, embed it

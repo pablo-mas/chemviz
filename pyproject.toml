@@ -42,6 +42,11 @@ Repository = "https://github.com/pablo-mas/chemviz"
 Issues = "https://github.com/pablo-mas/chemviz/issues"
 Changelog = "https://github.com/pablo-mas/chemviz/blob/main/CHANGELOG.md"
 
+[project.optional-dependencies]
+jupyter = [
+    "anywidget>=0.11.0",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -51,6 +56,7 @@ include = ["src", "tests", "README.md", "CHANGELOG.md", "LICENSE"]
 
 [dependency-groups]
 dev = [
+    "anywidget>=0.11.0",
     "pytest>=9.2.0",
     "scipy>=1.18.1",
 ]

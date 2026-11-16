@@ -661,11 +661,21 @@ async function main() {
       : "No molecule selected";
     redraw();
   }
-  function setSelected(indices, mode) {  // mode: "replace" | "add" | "toggle"
+  function setSelected(indices, mode, notify = true) {  // mode: "replace" | "add" | "toggle"
     if (mode === "replace") state.selected.fill(0);
-    for (const i of indices) state.selected[i] = mode === "toggle" ? 1 - state.selected[i] : 1;
+    for (const i of indices) if (i >= 0 && i < n) state.selected[i] = mode === "toggle" ? 1 - state.selected[i] : 1;
     state.nSelected = state.selected.reduce((a, b) => a + b, 0);
     updateHighlight();
+    if (notify) toHost({ chemviz: "selection", rows: selectedRows() });
+  }
+  function selectedRows() {
+    const rows = [];
+    for (let i = 0; i < n; i++) if (state.selected[i]) rows.push(i);
+    return rows;
+  }
+  // When embedded (Jupyter widget), the host page receives the selection and can set it.
+  function toHost(message) {
+    if (window.parent !== window) window.parent.postMessage(message, "*");
   }
   function selectionBounds() {
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -882,7 +892,13 @@ async function main() {
   applyColors();
   applyFilters();
   $("loading").remove();
+  window.addEventListener("message", (e) => {
+    if (e.source === window.parent && e.data && e.data.chemviz === "select" && Array.isArray(e.data.rows)) {
+      setSelected(e.data.rows, "replace", false);
+    }
+  });
   window.chemviz = { state, data, setSelected, fitTo, applyColors };  // handle for scripting and tests
+  toHost({ chemviz: "ready" });
 }
 
 main().catch((e) => {

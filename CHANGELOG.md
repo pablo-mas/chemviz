@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `Map.widget()`: the viewer as a Jupyter widget whose selection syncs with Python both
+  ways (`widget.selected` returns the selected rows; assigning index labels or a boolean
+  mask selects them in the viewer). Needs the new `jupyter` extra (anywidget).
 - `Map.project()`: place new molecules on an existing map without moving it. TMAP grafts
   them onto its tree as new branches; UMAP and t-SNE follow umap-learn's and openTSNE's
   `transform`; PCA projects them on its axes. The result has a `projected` column. The CLI
