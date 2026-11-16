@@ -103,12 +103,14 @@ def _add(cand, level, table, stamp, mask, m, q, c, lv):
 
 
 @nb.njit(cache=True, parallel=True)
-def _knn(hashes, sketch, order, rank, lcp, band, k, n_candidates, n_chunks):
+def _knn(hashes, sketch, order, rank, lcp, band, k, n_candidates, n_chunks, first_query, n_ref):
+    """kNN of rows ``first_query..n-1`` among rows ``0..n_ref-1`` (other rows are skipped)."""
     n, d = hashes.shape
     n_trees = order.shape[0]
-    indices = np.full((n, k), -1, dtype=np.int64)
-    distances = np.full((n, k), np.inf, dtype=np.float32)
-    per_chunk = (n + n_chunks - 1) // n_chunks
+    n_query = n - first_query
+    indices = np.full((n_query, k), -1, dtype=np.int64)
+    distances = np.full((n_query, k), np.inf, dtype=np.float32)
+    per_chunk = (n_query + n_chunks - 1) // n_chunks
     cap = n_trees * 2 * n_candidates
     size = 1
     while size < 2 * cap:
@@ -123,27 +125,31 @@ def _knn(hashes, sketch, order, rank, lcp, band, k, n_candidates, n_chunks):
         hist = np.empty(band + 1, dtype=np.int64)
         best_c = np.empty(k2, dtype=np.int64)
         best_e = np.empty(k2, dtype=np.int64)
-        for q in range(ch * per_chunk, min(n, (ch + 1) * per_chunk)):
+        for q in range(first_query + ch * per_chunk, min(n, first_query + (ch + 1) * per_chunk)):
             m = 0
             for t in range(n_trees):
                 p = rank[t, q]
                 lv = band
                 j = p
-                for _ in range(n_candidates):  # walk left while a prefix is shared
+                taken = 0
+                while taken < n_candidates:  # walk left while a prefix is shared
                     lv = min(lv, lcp[t, j])
                     if lv == 0:
                         break
                     j -= 1
-                    m = _add(cand, level, table, stamp, size - 1, m, q, order[t, j], lv)
+                    if order[t, j] < n_ref:
+                        m = _add(cand, level, table, stamp, size - 1, m, q, order[t, j], lv)
+                        taken += 1
                 lv = band
                 j = p + 1
-                for _ in range(n_candidates):  # walk right
-                    if j >= n:
-                        break
+                taken = 0
+                while taken < n_candidates and j < n:  # walk right
                     lv = min(lv, lcp[t, j])
                     if lv == 0:
                         break
-                    m = _add(cand, level, table, stamp, size - 1, m, q, order[t, j], lv)
+                    if order[t, j] < n_ref:
+                        m = _add(cand, level, table, stamp, size - 1, m, q, order[t, j], lv)
+                        taken += 1
                     j += 1
 
             # Keep every candidate at or above the deepest level reaching n_candidates.
@@ -196,8 +202,8 @@ def _knn(hashes, sketch, order, rank, lcp, band, k, n_candidates, n_chunks):
                         b = j
                 best_e[i], best_e[b] = best_e[b], best_e[i]
                 best_c[i], best_c[b] = best_c[b], best_c[i]
-                indices[q, i] = best_c[i]
-                distances[q, i] = 1.0 - best_e[i] / d
+                indices[q - first_query, i] = best_c[i]
+                distances[q - first_query, i] = 1.0 - best_e[i] / d
     return indices, distances
 
 
@@ -217,6 +223,24 @@ def lsh_knn(
     distance inf.
     """
     hashes = np.ascontiguousarray(hashes, dtype=np.uint32)
+    return _search(hashes, k, n_trees, kc, 0, len(hashes))
+
+
+def _lsh_query(ref: np.ndarray, query: np.ndarray, k: int = 10, n_trees: int = 8, kc: int = 10):
+    """Approximate kNN of each row of ``query`` among the rows of ``ref`` (as ``lsh_knn``).
+
+    A query without any LSH candidate gets its exact nearest reference as only neighbour.
+    """
+    hashes = np.ascontiguousarray(np.concatenate([ref, query]), dtype=np.uint32)
+    idx, dist = _search(hashes, k, n_trees, kc, len(ref), len(ref))
+    for i in np.flatnonzero(idx[:, 0] < 0):
+        same = (ref == query[i]).sum(axis=1)
+        idx[i, 0] = same.argmax()
+        dist[i, 0] = 1.0 - same.max() / ref.shape[1]
+    return idx, dist
+
+
+def _search(hashes, k, n_trees, kc, first_query, n_ref):
     n, d = hashes.shape
     if d % n_trees:
         raise ValueError(f"Number of hash values ({d}) must be divisible by n_trees ({n_trees})")
@@ -226,5 +250,5 @@ def lsh_knn(
     order, rank, lcp = _build(hashes, n_trees, band)
     low_byte = 0 if sys.byteorder == "little" else 3  # low byte of each value, without a uint32 temporary
     sketch = np.ascontiguousarray(hashes.view(np.uint8).reshape(n, d, 4)[:, :, low_byte])
-    n_chunks = max(1, min(n // 1000, nb.config.NUMBA_NUM_THREADS * 8))
-    return _knn(hashes, sketch, order, rank, lcp, band, k, k * kc, n_chunks)
+    n_chunks = max(1, min((n - first_query) // 1000, nb.config.NUMBA_NUM_THREADS * 8))
+    return _knn(hashes, sketch, order, rank, lcp, band, k, k * kc, n_chunks, first_query, n_ref)
