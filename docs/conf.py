@@ -1,6 +1,9 @@
 """Sphinx configuration for the chemviz documentation."""
 
+import subprocess
+import sys
 from importlib.metadata import version as _version
+from pathlib import Path
 
 project = "chemviz"
 author = "Pablo Mas"
@@ -19,7 +22,7 @@ extensions = [
 
 default_role = "py:obj"  # `name` in docstrings links to the API reference
 nitpicky = True  # every reference must resolve (the build treats warnings as errors)
-exclude_patterns = ["_build", "jupyter_execute", "Thumbs.db", ".DS_Store"]
+exclude_patterns = ["_build", "_gallery_data", "jupyter_execute", "Thumbs.db", ".DS_Store"]
 myst_enable_extensions = ["colon_fence", "deflist"]
 myst_heading_anchors = 3
 
@@ -47,6 +50,7 @@ intersphinx_mapping = {
 html_theme = "pydata_sphinx_theme"
 html_title = "chemviz"
 html_static_path = ["_static"]
+html_extra_path = ["_gallery"]  # gallery maps (made by make_gallery.py), served as maps/...
 html_theme_options = {
     "github_url": "https://github.com/pablo-mas/chemviz",
     "icon_links": [{"name": "PyPI", "url": "https://pypi.org/project/chemviz/", "icon": "fa-brands fa-python"}],
@@ -60,3 +64,12 @@ html_context = {
     "github_version": "main",
     "doc_path": "docs",
 }
+
+
+def _make_gallery(app):
+    """Generate the gallery's interactive maps (cached until the script or chemviz changes)."""
+    subprocess.run([sys.executable, str(Path(__file__).parent / "make_gallery.py")], check=True)
+
+
+def setup(app):
+    app.connect("builder-inited", _make_gallery)

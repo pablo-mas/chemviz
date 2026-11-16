@@ -19,3 +19,5 @@ benchmarks/out/
 # Documentation builds
 docs/_build/
 docs/jupyter_execute/
+docs/_gallery/
+docs/_gallery_data/
