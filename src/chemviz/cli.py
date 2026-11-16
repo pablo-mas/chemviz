@@ -8,7 +8,7 @@ from importlib.metadata import version
 from pathlib import Path
 
 IMAGE_SUFFIXES = (".png", ".svg", ".pdf")
-SUFFIXES = (".html", ".csv", *IMAGE_SUFFIXES)
+SUFFIXES = (".html", ".csv", ".chemviz", *IMAGE_SUFFIXES)
 
 
 METHODS = {
@@ -28,7 +28,8 @@ def _add_common(p: argparse.ArgumentParser) -> None:
     p.add_argument(
         "-o", "--output", type=Path, action="append", metavar="FILE",
         help="output file, by extension: .html (interactive viewer), .png/.svg/.pdf (static plot) "
-        "or .csv (data with x, y coordinates); repeat for several outputs (default: INPUT.html)",
+        "or .csv (data with x, y coordinates) or .chemviz (the map, to reload in Python); repeat for "
+        "several outputs (default: INPUT.html)",
     )
     p.add_argument("--smiles", metavar="COL", help="SMILES column (guessed if omitted)")
     p.add_argument("--columns", metavar="COLS", help="comma-separated columns to embed in the viewer (default: all)")
@@ -120,6 +121,8 @@ def main(argv: list[str] | None = None) -> int:
                 m.save(path, columns=columns, title=args.title, offline=args.offline)
             elif suffix == ".csv":
                 m.to_dataframe().to_csv(path, index=False)
+            elif suffix == ".chemviz":
+                m.save(path)
             else:
                 import matplotlib
 

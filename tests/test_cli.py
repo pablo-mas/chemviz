@@ -1,9 +1,11 @@
 import subprocess
 import sys
 
+import numpy as np
 import pandas as pd
 import pytest
 
+import chemviz as cv
 from chemviz.cli import main
 
 SMILES = (
@@ -47,9 +49,11 @@ def test_several_outputs(mols, tmp_path):
 )
 def test_every_method(mols, tmp_path, method, extra):
     out = tmp_path / f"{method}.csv"
-    assert main([method, str(mols), "-o", str(out), *extra]) == 0
+    assert main([method, str(mols), "-o", str(out), "-o", str(tmp_path / "m.chemviz"), *extra]) == 0
     coords = pd.read_csv(out)
     assert len(coords) == 30 and coords[["x", "y"]].notna().all().all()
+    m = cv.load(tmp_path / "m.chemviz")
+    assert m.method == method and np.allclose(m.x, coords["x"])
 
 
 def test_invalid_smiles_are_reported(tmp_path, capsys):

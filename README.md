@@ -69,6 +69,18 @@ m.method          # "tmap", "umap", "tsne" or "pca"
 m.to_dataframe()  # data + x, y columns
 ```
 
+Save a map to reload it later without recomputing it:
+
+```python
+m.save("map.chemviz")
+m = cv.load("map.chemviz")
+```
+
+A `.chemviz` file keeps the coordinates, the data (column types included) and the molecules'
+MinHash vectors (512 bytes per molecule; `m.save("map.chemviz", model=False)` leaves them out
+for a smaller file). It is read without pickle, so opening a file from someone else cannot
+run code.
+
 ## Methods
 
 | Method | What the map shows | ZINC250k | ChEMBL 1M |
@@ -91,8 +103,8 @@ chemviz pca library.sdf -o coords.csv           # data + x, y coordinates
 ```
 
 The subcommands are `tmap`, `umap`, `tsne` and `pca`. Each `-o` output is written according
-to its extension: `.html` (interactive viewer), `.png` / `.svg` / `.pdf` (static plot) or
-`.csv`. Options mirror the Python API (`--smiles`, `--columns`, `--offline`, `-k`, `--seed`…);
+to its extension: `.html` (interactive viewer), `.png` / `.svg` / `.pdf` (static plot),
+`.csv` or `.chemviz` (the map, for `cv.load`). Options mirror the Python API (`--smiles`, `--columns`, `--offline`, `-k`, `--seed`…);
 see `chemviz tmap --help`.
 
 ## Interactive viewer

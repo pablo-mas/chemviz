@@ -39,7 +39,11 @@ def _project(indptr, bits, components, shift):
 
 
 def _pca_csr(indptr, bits, d, n_components=2):
-    """PCA scores of a binary matrix given as CSR on-bit indices (sorted within rows)."""
+    """PCA of a binary matrix given as CSR on-bit indices (sorted within rows).
+
+    Returns the scores, the principal axes ``(d, n_components)`` and the shift
+    ``mean @ axes``, so that scores = X @ axes - shift.
+    """
     n = len(indptr) - 1
     # Each block holds a d x d count matrix: cap their total size at ~512 MB.
     n_blocks = int(max(1, min(nb.get_num_threads(), 8, 512e6 // (4 * d * d), n // 1000)))
@@ -52,7 +56,8 @@ def _pca_csr(indptr, bits, d, n_components=2):
     # Fix the sign of each axis (its largest loading is positive) for reproducible plots.
     signs = np.sign(components[np.abs(components).argmax(axis=0), np.arange(n_components)])
     components *= np.where(signs == 0, 1, signs)
-    return _project(indptr, bits, components, mean @ components)
+    shift = mean @ components
+    return _project(indptr, bits, components, shift), components, shift
 
 
 def _dense_to_csr(fingerprints):
@@ -73,7 +78,7 @@ def pca_layout(fingerprints: np.ndarray) -> np.ndarray:
     if fingerprints.ndim != 2 or not _is_binary(fingerprints):
         raise ValueError("pca_layout expects a 2D binary (0/1 or bool) fingerprint matrix")
     indptr, bits = _dense_to_csr(fingerprints)
-    return _pca_csr(indptr, bits, fingerprints.shape[1]).astype(np.float32)
+    return _pca_csr(indptr, bits, fingerprints.shape[1])[0].astype(np.float32)
 
 
 def pca(
@@ -96,14 +101,17 @@ def pca(
         if not _is_binary(array):
             raise ValueError("pca needs SMILES or binary (0/1) fingerprints; MinHash vectors have no linear structure")
         indptr, bits = _dense_to_csr(array)
-        n_bits, invalid = array.shape[1], []
+        n_bits, invalid, encoding = array.shape[1], [], "fingerprints"
     else:
         indptr, bits, invalid = _folded_ecfp(values, radius, n_bits, n_jobs=n_jobs)
+        encoding = "ecfp"
     keep, frame = _drop_invalid(frame, invalid)
     if keep is not None:  # invalid molecules have empty rows: drop them from the CSR offsets
         lengths = np.diff(indptr)[keep]
         indptr = np.zeros(len(lengths) + 1, dtype=np.int64)
         np.cumsum(lengths, out=indptr[1:])
-    pos = _pca_csr(indptr, bits, n_bits).astype(np.float32)
+    pos, components, shift = _pca_csr(indptr, bits, n_bits)
+    pos = pos.astype(np.float32)
     edges = np.empty((0, 2), dtype=np.int64)
-    return Map(pos[:, 0], pos[:, 1], edges, frame, np.asarray(invalid, dtype=np.int64), column, "pca")
+    return Map(pos[:, 0], pos[:, 1], edges, frame, np.asarray(invalid, dtype=np.int64), column, "pca",
+               {"encoding": encoding, "radius": radius, "n_bits": n_bits, "components": components, "shift": shift})

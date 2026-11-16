@@ -1,4 +1,5 @@
 from chemviz._pca import pca, pca_layout
+from chemviz._store import load
 from chemviz._tmap import tmap
 from chemviz._tsne import tsne, tsne_layout
 from chemviz._umap import umap, umap_layout
@@ -11,6 +12,7 @@ from chemviz.minhash import mhfp, minhash_ecfp, minhash_from_fingerprints
 
 __all__ = [
     "Map",
+    "load",
     "lsh_knn",
     "mhfp",
     "minhash_ecfp",

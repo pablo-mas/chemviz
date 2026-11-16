@@ -215,7 +215,7 @@ def umap(
     and embedded with UMAP (``min_dist``, ``n_epochs``; see ``umap_layout``). Clusters are
     tighter and better separated than in a tree map, but there are no edges to follow.
     """
-    hashes, frame, smiles, invalid = _encode(data, smiles, n_permutations, radius, n_jobs)
+    hashes, frame, smiles, invalid, encoding = _encode(data, smiles, n_permutations, radius, n_jobs)
     keep, frame = _drop_invalid(frame, invalid)
     if keep is not None:
         hashes = hashes[keep]
@@ -227,4 +227,6 @@ def umap(
         idx, dist = lsh_knn(hashes, k=min(k, n - 1), n_trees=n_trees, kc=kc)
         pos = umap_layout(idx, dist, n_epochs=n_epochs, min_dist=min_dist, seed=seed)
     edges = np.empty((0, 2), dtype=np.int64)
-    return Map(pos[:, 0], pos[:, 1], edges, frame, np.asarray(invalid, dtype=np.int64), smiles, "umap")
+    return Map(pos[:, 0], pos[:, 1], edges, frame, np.asarray(invalid, dtype=np.int64), smiles, "umap",
+               {"encoding": encoding, "radius": radius, "n_permutations": n_permutations, "n_trees": n_trees,
+                "seed": seed, "k": k, "min_dist": min_dist, "n_epochs": n_epochs, "kc": kc, "hashes": hashes})

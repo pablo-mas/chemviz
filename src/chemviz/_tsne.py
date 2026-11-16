@@ -329,7 +329,7 @@ def tsne(
     (see ``tsne_layout``). Like UMAP, it separates clusters well but distances between
     clusters are not meaningful, and there are no edges to follow.
     """
-    hashes, frame, smiles, invalid = _encode(data, smiles, n_permutations, radius, n_jobs)
+    hashes, frame, smiles, invalid, encoding = _encode(data, smiles, n_permutations, radius, n_jobs)
     keep, frame = _drop_invalid(frame, invalid)
     if keep is not None:
         hashes = hashes[keep]
@@ -339,7 +339,8 @@ def tsne(
         pos[:, 0] = np.arange(n)
     else:
         idx, dist = lsh_knn(hashes, k=min(int(3 * perplexity), n - 1), n_trees=n_trees, kc=kc)
-        del hashes  # free memory for the affinities
         pos = tsne_layout(idx, dist, perplexity=perplexity, n_iter=n_iter, seed=seed)
     edges = np.empty((0, 2), dtype=np.int64)
-    return Map(pos[:, 0], pos[:, 1], edges, frame, np.asarray(invalid, dtype=np.int64), smiles, "tsne")
+    return Map(pos[:, 0], pos[:, 1], edges, frame, np.asarray(invalid, dtype=np.int64), smiles, "tsne",
+               {"encoding": encoding, "radius": radius, "n_permutations": n_permutations, "n_trees": n_trees,
+                "seed": seed, "perplexity": perplexity, "n_iter": n_iter, "kc": kc, "hashes": hashes})

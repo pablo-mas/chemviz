@@ -34,7 +34,7 @@ def tmap(
     Forest with ``n_trees`` trees, ``k * kc`` candidates), reduced to a minimum spanning
     tree and laid out in 2D. Unparsable SMILES are skipped with a warning.
     """
-    hashes, frame, smiles, invalid = _encode(data, smiles, n_permutations, radius, n_jobs)
+    hashes, frame, smiles, invalid, encoding = _encode(data, smiles, n_permutations, radius, n_jobs)
     keep, frame = _drop_invalid(frame, invalid)
     if keep is not None:
         hashes = hashes[keep]
@@ -45,4 +45,6 @@ def tmap(
         idx, dist = lsh_knn(hashes, k=min(k, n - 1), n_trees=n_trees, kc=kc)
         edges, _ = minimum_spanning_forest(idx, dist)
     pos = tree_layout(n, edges, seed=seed)
-    return Map(pos[:, 0], pos[:, 1], edges, frame, np.asarray(invalid, dtype=np.int64), smiles, "tmap")
+    return Map(pos[:, 0], pos[:, 1], edges, frame, np.asarray(invalid, dtype=np.int64), smiles, "tmap",
+               {"encoding": encoding, "radius": radius, "n_permutations": n_permutations, "n_trees": n_trees,
+                "seed": seed, "k": k, "kc": kc, "hashes": hashes})

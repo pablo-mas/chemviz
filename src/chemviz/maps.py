@@ -1,7 +1,7 @@
 """The map object shared by all methods, and turning inputs into molecule encodings."""
 
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -19,6 +19,8 @@ class Map:
     holds pairs of row positions (the tree of a TMAP, empty for other methods). ``data`` keeps the input rows and index, minus
     ``invalid`` (positions in the input of the molecules that could not be parsed).
     ``smiles`` names the SMILES column of ``data``, if any (used to draw structures).
+    ``model`` keeps what is needed to place new molecules on the map: the encoding and
+    method parameters, and the molecules' MinHash vectors (or the PCA axes).
     """
 
     x: np.ndarray
@@ -28,6 +30,7 @@ class Map:
     invalid: np.ndarray
     smiles: str | None = None
     method: str = "tmap"
+    model: dict | None = field(default=None, repr=False, compare=False)
 
     def to_dataframe(self) -> pd.DataFrame:
         """The input rows with ``x`` and ``y`` columns added."""
@@ -46,10 +49,24 @@ class Map:
 
         return to_html(self.x, self.y, self.edges, self.data, self.smiles, columns, title, offline)
 
-    def save(self, path, columns=None, title: str | None = None, offline: bool = False) -> None:
-        """Write the interactive viewer to an HTML file (see ``to_html``)."""
+    def save(self, path, columns=None, title: str | None = None, offline: bool = False, model: bool = True) -> None:
+        """Write the map to a file, by extension.
+
+        - ``.html``: the interactive viewer (``columns``, ``title``, ``offline``: see ``to_html``).
+        - ``.chemviz``: the map itself, to reload with ``chemviz.load``. With ``model=False``
+          the MinHash vectors are left out: the file is smaller, but new molecules can no
+          longer be placed on the map.
+        """
         path = Path(path)
-        path.write_text(self.to_html(columns, title or path.stem, offline), encoding="utf-8")
+        suffix = path.suffix.lower()
+        if suffix == ".chemviz":
+            from chemviz._store import save_map
+
+            save_map(self, path, model)
+        elif suffix in (".html", ".htm"):
+            path.write_text(self.to_html(columns, title or path.stem, offline), encoding="utf-8")
+        else:
+            raise ValueError(f"Cannot save a map as {path.suffix!r}: use .html or .chemviz")
 
     def show(self, columns=None, title: str = "chemviz", height: int = 650, offline: bool = False):
         """Display the interactive viewer inline in a Jupyter notebook (see ``to_html``)."""
@@ -129,19 +146,20 @@ def _is_binary(array):
 
 
 def _encode(data, smiles, n_permutations, radius, n_jobs):
-    """MinHash vectors, matching DataFrame, its SMILES column (or None) and invalid input positions."""
+    """MinHash vectors, matching DataFrame, its SMILES column (or None), invalid input
+    positions and the kind of input encoded ("ecfp", "minhash" or "fingerprints")."""
     frame, column, values, array = _inputs(data, smiles)
     if array is not None:
         if array.dtype == np.uint32:
-            return array, frame, None, []
+            return array, frame, None, [], "minhash"
         if _is_binary(array):
-            return minhash_from_fingerprints(array, n_permutations=n_permutations), frame, None, []
+            return minhash_from_fingerprints(array, n_permutations=n_permutations), frame, None, [], "fingerprints"
         raise ValueError(
             "A 2D array must hold uint32 MinHash vectors or binary (0/1) fingerprints; "
             f"got dtype {array.dtype}"
         )
     hashes, invalid = _minhash_ecfp(values, n_permutations, radius, 42, 10_000, n_jobs)
-    return hashes, frame, column, invalid
+    return hashes, frame, column, invalid, "ecfp"
 
 
 def _drop_invalid(frame, invalid):

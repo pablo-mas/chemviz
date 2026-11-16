@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- `Map.save("map.chemviz")` and `chemviz.load()`: save a map and reload it without
+  recomputing it. Files keep the coordinates, the data with its column types and the MinHash
+  vectors (`model=False` leaves them out), and are read without pickle. The CLI writes them
+  with `-o map.chemviz`.
+- Maps keep their MinHash vectors (or PCA axes) in `Map.model`; t-SNE peak memory grows by
+  512 bytes per molecule as a result.
+
 ## 0.1.0 (2026-11-16)
 
 First release: from-scratch reimplementations of TMAP, UMAP, t-SNE and PCA for molecules, in
