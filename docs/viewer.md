@@ -59,8 +59,10 @@ from a CDN when the page opens. To get a page that needs no network at all, embe
 m.save("map.html", offline=True)
 ```
 
-RDKit.js is downloaded once, checked against a pinned SHA-256 and cached in
-`~/.cache/chemviz` (set the `CHEMVIZ_CACHE` environment variable to use another folder).
+RDKit.js is downloaded once, checked against a pinned SHA-256 and cached in the user cache
+folder: `~/.cache/chemviz` on Linux, `~/Library/Caches/chemviz` on macOS,
+`%LOCALAPPDATA%\chemviz` on Windows (set the `CHEMVIZ_CACHE` environment variable to use
+another folder).
 
 ## Sharing
 

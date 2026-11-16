@@ -48,9 +48,10 @@ Common to every subcommand:
 | `--n-jobs N` | Processes for SMILES parsing (all cores by default) |
 
 The method subcommands also take the parameters of their Python function, with dashes:
-`--radius` for all, `--n-bits` for `pca`; `-k`, `--kc`, `--n-permutations`, `--n-trees` and
-`--seed` for `tmap`, `umap` and `tsne`; `--min-dist` and `--n-epochs` for `umap`;
-`--perplexity` and `--n-iter` for `tsne`. See the {doc}`api` for their meaning.
+`--radius` for all, `--n-bits` for `pca`; `--kc`, `--n-permutations`, `--n-trees` and
+`--seed` for `tmap`, `umap` and `tsne`; `-k` for `tmap` and `umap`; `--min-dist` and
+`--n-epochs` for `umap`; `--perplexity` (which sets the number of neighbours) and `--n-iter`
+for `tsne`. See the {doc}`api` for their meaning.
 
 ## Placing molecules on a saved map
 

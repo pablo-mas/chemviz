@@ -89,7 +89,7 @@ Unlike umap-learn, which updates points one edge after another, chemviz updates 
 in parallel from the positions at the start of each epoch. Results thus do not depend on the
 number of threads; the attraction is scaled to keep umap-learn's balance with repulsion, and
 gives the same quality on the same graph. The default starting layout is a quick tree layout
-of the kNN graph, instead of umap-learn's spectral embedding.
+of the minimum spanning forest of the kNN graph, instead of umap-learn's spectral embedding.
 
 ## t-SNE
 

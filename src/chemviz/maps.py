@@ -124,7 +124,7 @@ class Map:
             Embed RDKit.js, which draws the structures, in the page (about 3.3 MB more) so
             that it needs no network. By default it is loaded from a CDN when the page opens.
             RDKit.js is downloaded once, checked against a pinned SHA-256 and cached in
-            ``~/.cache/chemviz`` (or ``$CHEMVIZ_CACHE``).
+            the user cache folder (``$CHEMVIZ_CACHE`` if set).
 
         Returns
         -------
