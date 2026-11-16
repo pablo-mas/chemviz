@@ -10,7 +10,7 @@ import numba as nb
 import numpy as np
 
 from chemviz.graph import minimum_spanning_forest
-from chemviz.layout import tree_layout
+from chemviz.layout import _threads_for, tree_layout
 from chemviz.lsh import lsh_knn
 from chemviz.maps import Map, _drop_invalid, _encode
 
@@ -200,10 +200,11 @@ def umap_layout(
     eps_neg = eps / negative_sample_rate
     next_neg = eps_neg.copy()
     new = np.empty_like(pos)
-    for epoch in range(n_epochs):
-        _epoch(pos, new, indptr, nbrs, eps, next_sample, eps_neg, next_neg, a, b,
-               1.0 - epoch / n_epochs, epoch, seed)
-        pos, new = new, pos
+    with _threads_for(n):
+        for epoch in range(n_epochs):
+            _epoch(pos, new, indptr, nbrs, eps, next_sample, eps_neg, next_neg, a, b,
+                   1.0 - epoch / n_epochs, epoch, seed)
+            pos, new = new, pos
     return pos.astype(np.float32)
 
 

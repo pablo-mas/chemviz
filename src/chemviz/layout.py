@@ -6,6 +6,8 @@ expanded level by level and refined with Fruchterman-Reingold iterations whose
 repulsion is approximated on a quadtree pyramid (Barnes-Hut style).
 """
 
+from contextlib import contextmanager
+
 import numba as nb
 import numpy as np
 
@@ -350,22 +352,31 @@ def _iterate(pos, indptr, nbrs, k, n_iter, temp0, gravity, anchor, levels, offse
     return pos
 
 
+@contextmanager
+def _threads_for(n):
+    """Use fewer threads for small inputs.
+
+    Each iteration launches several parallel regions, which costs from microseconds to
+    milliseconds each (far more on a loaded machine).
+    """
+    max_threads = nb.get_num_threads()
+    nb.set_num_threads(int(np.clip(n // 5000, 1, max_threads)))
+    try:
+        yield
+    finally:
+        nb.set_num_threads(max_threads)
+
+
 def _force_iterations(pos, indptr, nbrs, k, n_iter, temp0, gravity, anchor):
     n = pos.shape[0]
     # ~1 particle per finest cell over the bounding box: tree layouts leave much of it
     # empty, so occupied cells are denser and the exact near-field term dominates otherwise.
     levels = int(np.clip(np.ceil(np.log2(np.sqrt(max(n, 4)))), 2, 12))
     offsets = np.array([sum(4**j for j in range(lvl)) for lvl in range(levels + 2)], dtype=np.int64)
-    # Each iteration launches several parallel regions, which costs from microseconds to
-    # milliseconds each (far more on a loaded machine): small levels use fewer threads.
-    max_threads = nb.get_num_threads()
-    nb.set_num_threads(int(np.clip(n // 5000, 1, max_threads)))
-    try:
+    with _threads_for(n):
         return _iterate(np.array(pos, dtype=np.float64), indptr, nbrs, float(k), n_iter,
                         float(temp0), float(gravity), np.ascontiguousarray(anchor, dtype=np.float64),
                         levels, offsets)
-    finally:
-        nb.set_num_threads(max_threads)
 
 
 # --------------------------------------------------------------------------- multilevel
