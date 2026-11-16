@@ -47,6 +47,8 @@ intersphinx_mapping = {
     "IPython": ("https://ipython.readthedocs.io/en/stable", None),
 }
 
+linkcheck_ignore = [r"https://www\.npmjs\.com/"]  # answers 403 to non-browsers
+
 html_theme = "pydata_sphinx_theme"
 html_title = "chemviz"
 html_static_path = ["_static"]
@@ -55,9 +57,12 @@ html_theme_options = {
     "github_url": "https://github.com/pablo-mas/chemviz",
     "icon_links": [{"name": "PyPI", "url": "https://pypi.org/project/chemviz/", "icon": "fa-brands fa-python"}],
     "navbar_align": "left",
+    "header_links_before_dropdown": 7,
     "show_toc_level": 2,
     "use_edit_page_button": True,
 }
+# Pages without sub-pages have nothing to show in the left sidebar: give their content the room.
+html_sidebars = {page: [] for page in ("index", "gallery", "how-it-works", "benchmarks", "api")}
 html_context = {
     "github_user": "pablo-mas",
     "github_repo": "chemviz",

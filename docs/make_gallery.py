@@ -15,7 +15,7 @@ import pandas as pd
 
 import chemviz as cv
 
-URL = ("https://raw.githubusercontent.com/aspuru-guzik-group/chemical_vae/master/"
+URL = ("https://raw.githubusercontent.com/the-matter-lab/chemical_vae/master/"
        "models/zinc_properties/250k_rndm_zinc_drugs_clean_3.csv")
 DATA = Path(__file__).parent / "_gallery_data"
 MAPS = Path(__file__).parent / "_gallery" / "maps"

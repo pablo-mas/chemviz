@@ -26,37 +26,22 @@ cv.tmap("molecules.csv").save("map.html")
   in seconds, without recomputing or moving it.
 - **Command line**: `chemviz tmap molecules.csv -o map.html`.
 
-```{toctree}
-:maxdepth: 1
-:caption: Getting started
+## Where next
 
-installation
-quickstart
-methods
-```
-
-```{toctree}
-:maxdepth: 1
-:caption: User guide
-
-inputs
-viewer
-saving
-projection
-jupyter
-large
-cli
-```
+- {doc}`getting-started`: install chemviz, make a first map, and choose a method.
+- {doc}`guide`: inputs, the viewer, saving maps, placing new molecules, Jupyter, large
+  datasets and the command line.
+- {doc}`gallery`: interactive maps of 50,000 molecules with each method.
+- {doc}`api`: every function and parameter.
 
 ```{toctree}
-:maxdepth: 1
-:caption: More
+:hidden:
 
+getting-started
+guide
 gallery
 how-it-works
 benchmarks
 api
-changelog
-citing
-contributing
+about
 ```

@@ -1,7 +1,7 @@
 # Gallery
 
 Interactive maps of the same 50,000 molecules, a random sample of
-[ZINC250k](https://github.com/aspuru-guzik-group/chemical_vae), made by
+[ZINC250k](https://github.com/the-matter-lab/chemical_vae), made by
 [`make_gallery.py`](https://github.com/pablo-mas/chemviz/blob/main/docs/make_gallery.py)
 at every build of this documentation. Each map is the HTML file chemviz writes with
 `m.save("map.html")`.

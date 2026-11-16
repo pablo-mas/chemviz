@@ -30,7 +30,7 @@ import pandas as pd
 
 import chemviz as cv
 
-url = ("https://raw.githubusercontent.com/aspuru-guzik-group/chemical_vae/master/"
+url = ("https://raw.githubusercontent.com/the-matter-lab/chemical_vae/master/"
        "models/zinc_properties/250k_rndm_zinc_drugs_clean_3.csv")
 df = pd.read_csv(url).sample(20_000, random_state=0)
 df["smiles"] = df["smiles"].str.strip()

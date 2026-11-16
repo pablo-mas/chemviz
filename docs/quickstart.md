@@ -20,7 +20,7 @@ properties per molecule:
 ```{code-cell} python
 import pandas as pd
 
-url = ("https://raw.githubusercontent.com/aspuru-guzik-group/chemical_vae/master/"
+url = ("https://raw.githubusercontent.com/the-matter-lab/chemical_vae/master/"
        "models/zinc_properties/250k_rndm_zinc_drugs_clean_3.csv")
 df = pd.read_csv(url).sample(2000, random_state=0)
 df["smiles"] = df["smiles"].str.strip()  # this file ends each SMILES with a line break
