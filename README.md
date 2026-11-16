@@ -1,7 +1,7 @@
 # chemviz
 
 [![PyPI](https://img.shields.io/pypi/v/chemviz)](https://pypi.org/project/chemviz/)
-[![Documentation](https://readthedocs.org/projects/chemviz/badge/?version=latest)](https://chemviz.readthedocs.io)
+[![Documentation](https://readthedocs.org/projects/chemviz/badge/?version=stable)](https://chemviz.readthedocs.io)
 [![CI](https://github.com/pablo-mas/chemviz/actions/workflows/ci.yml/badge.svg)](https://github.com/pablo-mas/chemviz/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/pablo-mas/chemviz/blob/main/LICENSE)
 
@@ -13,7 +13,7 @@ molecules in, an interactive map out, in one line. There is nothing to compile a
 environment to set up, and it maps millions of molecules on a laptop.
 
 **Documentation: [chemviz.readthedocs.io](https://chemviz.readthedocs.io)**, with a
-[gallery](https://chemviz.readthedocs.io/en/latest/gallery.html) of interactive maps.
+[gallery](https://chemviz.readthedocs.io/en/stable/gallery.html) of interactive maps.
 
 ![Interactive viewer](https://raw.githubusercontent.com/pablo-mas/chemviz/main/docs/images/viewer.png)
 
@@ -48,14 +48,28 @@ installs from wheels; UMAP and t-SNE need neither umap-learn nor openTSNE.
 ```python
 import chemviz as cv
 
-m = cv.tmap("molecules.csv")    # the SMILES column is detected automatically
+# Each method takes the same inputs: a CSV/SDF file, a DataFrame or a list of SMILES
+# (the SMILES column is detected automatically).
+m = cv.tmap("molecules.csv")    # tree map: series and their branching
+m = cv.umap("molecules.csv")    # UMAP: tight, well separated clusters
+m = cv.tsne("molecules.csv")    # t-SNE: clusters with fine local detail
+m = cv.pca("molecules.csv")     # PCA: linear overview of fingerprints
+
 m.save("map.html")              # interactive viewer, open it in any browser
 m.plot(color="activity")        # static matplotlib figure
 m.save("map.chemviz")           # the map itself, to reload with cv.load
 
-cv.umap("molecules.csv").save("umap.html")   # same for cv.tsne and cv.pca
-
 hits = m.project("hits.csv")    # place new molecules on the map, without moving it
+```
+
+From a list of SMILES:
+
+```python
+smiles = ["CCO", "CCCO", "c1ccccc1O", "c1ccccc1N", "CC(=O)Nc1ccc(O)cc1"]
+cv.tmap(smiles).save("tmap.html")
+cv.umap(smiles).save("umap.html")
+cv.tsne(smiles).save("tsne.html")
+cv.pca(smiles).save("pca.html")
 ```
 
 From the command line:
@@ -76,13 +90,13 @@ chemviz project map.chemviz hits.csv -o hits.html
 
 Times are end to end from SMILES on a 20-thread desktop. chemviz's UMAP and t-SNE match the
 quality of umap-learn and openTSNE on the same neighbour graphs, and are faster; see the
-[benchmarks](https://chemviz.readthedocs.io/en/latest/benchmarks.html) and
-[how to choose a method](https://chemviz.readthedocs.io/en/latest/methods.html).
+[benchmarks](https://chemviz.readthedocs.io/en/stable/benchmarks.html) and
+[how to choose a method](https://chemviz.readthedocs.io/en/stable/methods.html).
 
 ## Credits
 
 chemviz is an independent reimplementation of TMAP, MHFP, UMAP and t-SNE. If you use it,
-please cite the original work (see [citing](https://chemviz.readthedocs.io/en/latest/citing.html)):
+please cite the original work (see [citing](https://chemviz.readthedocs.io/en/stable/citing.html)):
 
 - D. Probst, J.-L. Reymond. *Visualization of very large high-dimensional data sets as minimum
   spanning trees.* J. Cheminform. 12, 12 (2020).
