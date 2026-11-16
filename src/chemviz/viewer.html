@@ -415,7 +415,14 @@ async function main() {
   const n = header.n;
   document.title = header.title;
   $("title").textContent = header.title;
-  $("subtitle").textContent = `${n.toLocaleString()} molecules · ${header.n_edges.toLocaleString()} edges`;
+  const summary = header.n_edges
+    ? `${n.toLocaleString()} molecules · ${header.n_edges.toLocaleString()} edges`
+    : `${n.toLocaleString()} molecules`;
+  $("subtitle").textContent = summary;
+  if (!header.n_edges) {  // UMAP, t-SNE and PCA maps have no edges
+    $("edge-alpha").closest("label").style.display = "none";
+    $("show-edges").closest("label").style.display = "none";
+  }
 
   const renderer = new Renderer($("gl"), data);
   const grid = new Grid(pos, n);
@@ -637,7 +644,7 @@ async function main() {
     let shown = 0;
     for (let i = 0; i < n; i++) shown += vis[i];
     $("subtitle").textContent = shown === n
-      ? `${n.toLocaleString()} molecules · ${header.n_edges.toLocaleString()} edges`
+      ? summary
       : `${shown.toLocaleString()} of ${n.toLocaleString()} molecules shown`;
     renderer.setFlags(vis);
     updateHighlight();
