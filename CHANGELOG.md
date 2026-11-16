@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 (2026-11-16)
 
 - `Map.widget()`: the viewer as a Jupyter widget whose selection syncs with Python both
   ways (`widget.selected` returns the selected rows; assigning index labels or a boolean
