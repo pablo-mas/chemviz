@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-11-16)
 
 First release: from-scratch reimplementations of TMAP, UMAP, t-SNE and PCA for molecules, in
 Python + numba.
