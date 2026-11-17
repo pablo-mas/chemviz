@@ -2,7 +2,7 @@
 
 The maps are written to docs/_gallery/maps/, which Sphinx copies to the site as maps/; the
 downloaded dataset and the cache stamp stay in docs/_gallery_data/. The maps are regenerated
-only when this script or the chemviz version changes.
+only when this script or chemviz (its version, its code or its viewer) changes.
 """
 
 import hashlib
@@ -24,7 +24,11 @@ TITLES = {"tmap": "TMAP", "umap": "UMAP", "tsne": "t-SNE", "pca": "PCA"}
 
 
 def main():
-    stamp = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()[:16] + "-" + version("chemviz")
+    digest = hashlib.sha256(Path(__file__).read_bytes())
+    for path in sorted(Path(cv.__file__).parent.glob("*")):
+        if path.suffix in (".py", ".html"):
+            digest.update(path.read_bytes())
+    stamp = digest.hexdigest()[:16] + "-" + version("chemviz")
     names = [*TITLES, "projection"]
     if (DATA / "stamp").exists() and (DATA / "stamp").read_text() == stamp \
             and all((MAPS / f"{name}.html").exists() for name in names):
