@@ -1,7 +1,7 @@
 [project]
 name = "chemviz"
 version = "0.2.0"
-description = "Fast, easy-to-install chemical space visualization: TMAP, UMAP, t-SNE and PCA"
+description = "Fast, easy-to-install visualization of molecule sets: chemical space maps with TMAP, UMAP, t-SNE and PCA"
 license = "MIT"
 license-files = ["LICENSE"]
 readme = "README.md"

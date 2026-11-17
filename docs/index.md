@@ -1,6 +1,6 @@
 # chemviz
 
-**Fast, easy-to-install chemical space visualization.**
+**Fast, easy-to-install visualization of molecule sets: interactive maps of their chemical space, from a few hundred molecules to millions.**
 
 chemviz maps molecules with [TMAP](https://doi.org/10.1186/s13321-020-0416-x), UMAP, t-SNE or
 PCA, all reimplemented in pure Python and [numba](https://numba.pydata.org/): molecules in, an

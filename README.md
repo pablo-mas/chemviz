@@ -5,7 +5,7 @@
 [![CI](https://github.com/pablo-mas/chemviz/actions/workflows/ci.yml/badge.svg)](https://github.com/pablo-mas/chemviz/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/pablo-mas/chemviz/blob/main/LICENSE)
 
-Fast, easy-to-install chemical space visualization.
+Fast, easy-to-install visualization of molecule sets: interactive maps of their chemical space, from a few hundred molecules to millions.
 
 chemviz maps molecules with [TMAP](https://doi.org/10.1186/s13321-020-0416-x) (Probst &
 Reymond), UMAP, t-SNE or PCA, all reimplemented in pure Python + [numba](https://numba.pydata.org/):
