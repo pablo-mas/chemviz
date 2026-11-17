@@ -1,0 +1,14 @@
+/* Home page: the logo replaces the "chemviz" title, which stays for screen readers and the tab title. */
+section#chemviz > h1 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+img.hero-logo {
+  display: block;
+  width: min(380px, 80%);
+  margin: 1.5rem auto 2rem;
+}

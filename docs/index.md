@@ -1,5 +1,15 @@
 # chemviz
 
+```{image} _static/logo.svg
+:class: only-light hero-logo
+:alt: chemviz
+```
+
+```{image} _static/logo-dark.svg
+:class: only-dark hero-logo
+:alt: chemviz
+```
+
 **Fast, easy-to-install visualization of molecule sets: interactive maps of their chemical space, from a few hundred molecules to millions.**
 
 chemviz maps molecules with [TMAP](https://doi.org/10.1186/s13321-020-0416-x), UMAP, t-SNE or

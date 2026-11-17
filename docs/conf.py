@@ -52,8 +52,11 @@ linkcheck_ignore = [r"https://www\.npmjs\.com/"]  # answers 403 to non-browsers
 html_theme = "pydata_sphinx_theme"
 html_title = "chemviz"
 html_static_path = ["_static"]
+html_css_files = ["custom.css"]
+html_favicon = "_static/favicon.svg"
 html_extra_path = ["_gallery"]  # gallery maps (made by make_gallery.py), served as maps/...
 html_theme_options = {
+    "logo": {"image_light": "_static/wordmark.svg", "image_dark": "_static/wordmark-dark.svg", "alt_text": "chemviz"},
     "github_url": "https://github.com/pablo-mas/chemviz",
     "icon_links": [{"name": "PyPI", "url": "https://pypi.org/project/chemviz/", "icon": "fa-brands fa-python"}],
     "navbar_align": "left",
