@@ -23,7 +23,11 @@ import chemviz as cv
 cv.tmap("molecules.csv").save("map.html")
 ```
 
-![The interactive viewer](images/viewer.png)
+<video class="demo-video" controls playsinline preload="metadata" poster="_static/demo-poster.jpg"
+       aria-label="chemviz demo: one line of Python makes a map; colouring, lasso selection and structures on hover in the viewer">
+  <source src="_static/demo.mp4" type="video/mp4">
+  <a href="_static/demo.mp4">Watch the demo</a>.
+</video>
 
 - **Four methods, one API**: `cv.tmap`, `cv.umap`, `cv.tsne` and `cv.pca` take the same inputs
   (SMILES lists, DataFrames, CSV/SDF files, fingerprints) and return the same map object.

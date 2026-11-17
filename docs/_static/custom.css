@@ -12,3 +12,11 @@ img.hero-logo {
   width: min(380px, 80%);
   margin: 1.5rem auto 2rem;
 }
+video.demo-video {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 1rem 0 1.5rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--pst-color-border);
+}
