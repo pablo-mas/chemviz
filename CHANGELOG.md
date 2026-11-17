@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Viewer: points and selection rings have antialiased edges, so they are round and smooth
+  instead of jagged.
+
 ## 0.2.0 (2026-11-17)
 
 - `Map.widget()`: the viewer as a Jupyter widget whose selection syncs with Python both

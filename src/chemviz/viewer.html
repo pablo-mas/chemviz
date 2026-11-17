@@ -189,23 +189,29 @@ const valueOf = (col, i) => col.kind === "num" ? col.values[i] : col.kind === "c
 const POINT_VS = `#version 300 es
 in vec2 a_pos; in vec4 a_color; in float a_flags;
 uniform vec2 u_scale, u_offset; uniform float u_size, u_highlight;
-out vec4 v_color; out float v_ring;
+out vec4 v_color; out float v_ring, v_size;
 void main() {
   bool visible = mod(a_flags, 2.0) > 0.5;
   if (!visible) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0; return; }
   gl_Position = vec4(a_pos * u_scale + u_offset, 0.0, 1.0);
-  gl_PointSize = u_highlight > 0.5 ? max(u_size * 1.6, u_size + 6.0) : u_size;
+  v_size = u_highlight > 0.5 ? max(u_size * 1.6, u_size + 6.0) : u_size;
+  gl_PointSize = v_size + 1.0;  // half a pixel of margin on each side for the antialiased edge
   v_color = a_color; v_ring = u_highlight;
 }`;
 const POINT_FS = `#version 300 es
 precision mediump float;
-in vec4 v_color; in float v_ring; uniform vec3 u_ringColor;
+in vec4 v_color; in float v_ring, v_size; uniform vec3 u_ringColor;
 out vec4 color;
 void main() {
-  vec2 d = gl_PointCoord * 2.0 - 1.0; float r = dot(d, d);
-  if (r > 1.0) discard;
-  if (v_ring > 0.5) { color = r > 0.45 ? vec4(u_ringColor, 1.0) : vec4(v_color.rgb, 1.0); return; }
-  color = v_color;
+  // Distance from the centre in disc radii, and one pixel in the same unit: edges fade over 1 px.
+  float r = length(gl_PointCoord * 2.0 - 1.0) * (v_size + 1.0) / v_size, px = 2.0 / v_size;
+  float a = 1.0 - smoothstep(1.0 - 0.5 * px, 1.0 + 0.5 * px, r);
+  if (a <= 0.0) discard;
+  if (v_ring > 0.5) {
+    float t = smoothstep(0.67 - 0.5 * px, 0.67 + 0.5 * px, r);  // ring from 0.67 radius, as before
+    color = vec4(mix(v_color.rgb, u_ringColor, t), a); return;
+  }
+  color = vec4(v_color.rgb, v_color.a * a);
 }`;
 const EDGE_VS = `#version 300 es
 in vec2 a_pos; in vec4 a_color; in float a_flags;
