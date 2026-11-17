@@ -4,6 +4,9 @@
 
 - Viewer: points and selection rings have antialiased edges, so they are round and smooth
   instead of jagged.
+- Viewer: points grow with the zoom (as the square root of the zoom, up to 40 pixels), so a
+  zoomed-in region shows large points while clusters still spread apart. *Grow points with
+  zoom* turns it off.
 
 ## 0.2.0 (2026-11-17)
 

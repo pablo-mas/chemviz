@@ -24,7 +24,9 @@ m.show()              # or display it in a notebook
 - **Selection**: click a point to select it, Ctrl/⌘ + click to add or remove one,
   Shift + drag to select with a lasso. The selection can be zoomed to and exported to CSV.
 - **Display**: point size, edge opacity and visibility (for TMAP), and a light or dark
-  theme following the system.
+  theme following the system. Points grow as you zoom in (up to 40 pixels), so that a
+  zoomed-in region shows large, separate points; untick *Grow points with zoom* to keep
+  them at the slider's size.
 
 Drag to pan, scroll to zoom. The panel can be hidden with the ☰ button.
 

@@ -90,6 +90,7 @@ label.slider input { flex: 1; }
     <label class="slider"><span>Edge opacity</span><input id="edge-alpha" type="range" min="0" max="1" step="0.05" value="0.5"></label>
     <div class="row"><label><input id="show-edges" type="checkbox" checked> Show edges</label>
       <button id="reset-view" style="margin-left:auto">Reset view</button></div>
+    <div class="row"><label><input id="zoom-size" type="checkbox" checked> Grow points with zoom</label></div>
 
     <h2>Search</h2>
     <div class="row"><select id="search-col" class="grow"></select></div>
@@ -459,6 +460,13 @@ async function main() {
   const resetView = () => fitTo(...grid.bounds);
   const toData = (px, py) => [(px - stage.clientWidth / 2) / state.view.scale + state.view.cx,
     -(py - stage.clientHeight / 2) / state.view.scale + state.view.cy];
+  // Point size on screen: the slider's size, grown as the square root of the zoom (so points get
+  // bigger while clusters still spread apart) up to 40 px, never below the slider's size.
+  function pointSize() {
+    const base = +$("point-size").value, zoom = state.view.scale / baseScale;
+    if (!$("zoom-size").checked || !(zoom > 1)) return base;
+    return Math.max(base, Math.min(base * Math.sqrt(zoom), 40));
+  }
   const toScreen = (x, y) => [(x - state.view.cx) * state.view.scale + stage.clientWidth / 2,
     -(y - state.view.cy) * state.view.scale + stage.clientHeight / 2];
 
@@ -471,7 +479,7 @@ async function main() {
       const colored = state.colorBy !== null;
       renderer.draw(state.view, {
         bg: theme.bg, edgeColor: theme.edge, ringColor: theme.select,
-        pointSize: +$("point-size").value, edgeAlpha: +$("edge-alpha").value,
+        pointSize: pointSize(), edgeAlpha: +$("edge-alpha").value,
         showEdges: $("show-edges").checked, edgeMix: colored ? 0.55 : 0,
       });
       $("status").textContent = state.view.scale ? `zoom ×${(state.view.scale / baseScale).toFixed(1)}` : "";
@@ -763,7 +771,7 @@ async function main() {
 
   function pick(px, py) {
     const [x, y] = toData(px, py);
-    const radius = (Math.max(+$("point-size").value / 2, 3) + 3) / state.view.scale;
+    const radius = (Math.max(pointSize() / 2, 3) + 3) / state.view.scale;
     return grid.nearest(x, y, radius, state.visible);
   }
 
@@ -875,7 +883,7 @@ async function main() {
     if (state.colorBy === name) applyColors();
   };
 
-  for (const id of ["point-size", "edge-alpha", "show-edges"]) $(id).addEventListener("input", redraw);
+  for (const id of ["point-size", "edge-alpha", "show-edges", "zoom-size"]) $(id).addEventListener("input", redraw);
   $("reset-view").onclick = resetView;
   $("sel-zoom").onclick = zoomToSelection;
   $("sel-clear").onclick = () => setSelected([], "replace");
