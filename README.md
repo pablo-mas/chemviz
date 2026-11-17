@@ -1,4 +1,9 @@
-# chemviz
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/pablo-mas/chemviz/main/docs/_static/logo-dark.svg">
+    <img src="https://raw.githubusercontent.com/pablo-mas/chemviz/main/docs/_static/logo.svg" alt="chemviz" width="380">
+  </picture>
+</h1>
 
 [![PyPI](https://img.shields.io/pypi/v/chemviz)](https://pypi.org/project/chemviz/)
 [![Documentation](https://readthedocs.org/projects/chemviz/badge/?version=latest)](https://chemviz.readthedocs.io)
@@ -13,7 +18,8 @@ molecules in, an interactive map out, in one line. There is nothing to compile a
 environment to set up, and it maps millions of molecules on a laptop.
 
 **Documentation: [chemviz.readthedocs.io](https://chemviz.readthedocs.io)**, with a
-[gallery](https://chemviz.readthedocs.io/en/latest/gallery.html) of interactive maps.
+[gallery](https://chemviz.readthedocs.io/en/latest/gallery.html) of interactive maps and a
+[demo video](https://chemviz.readthedocs.io).
 
 ![Interactive viewer](https://raw.githubusercontent.com/pablo-mas/chemviz/main/docs/images/viewer.png)
 
